@@ -10,13 +10,13 @@ publish = false
 repository = "https://github.com/bhrumom/global-dandelion-rs"
 
 [workspace.dependencies]
-dandelion-core = { path = "crates/dandelion-core" }
-dandelion-config = { path = "crates/dandelion-config" }
-dandelion-packet = { path = "crates/dandelion-packet" }
-dandelion-scanner = { path = "crates/dandelion-scanner" }
-dandelion-pacing = { path = "crates/dandelion-pacing" }
-dandelion-transport = { path = "crates/dandelion-transport" }
-dandelion-platform-linux = { path = "crates/dandelion-platform-linux" }
+dandelion-core = { path = "crates/dandelion-core", version = "=0.1.0" }
+dandelion-config = { path = "crates/dandelion-config", version = "=0.1.0" }
+dandelion-packet = { path = "crates/dandelion-packet", version = "=0.1.0" }
+dandelion-scanner = { path = "crates/dandelion-scanner", version = "=0.1.0" }
+dandelion-pacing = { path = "crates/dandelion-pacing", version = "=0.1.0" }
+dandelion-transport = { path = "crates/dandelion-transport", version = "=0.1.0" }
+dandelion-platform-linux = { path = "crates/dandelion-platform-linux", version = "=0.1.0" }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

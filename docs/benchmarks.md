@@ -1,6 +1,11 @@
 # Measurement plan and limitations
 
 No measured Rust/Python speedup is claimed in this implementation.
+The x86_64 quality job also runs a short controlled encode/decode benchmark and
+includes raw Criterion estimates in `packet-benchmark.json` inside its checksummed
+artifact. These shared-runner values are inspectable evidence, not stable hardware
+performance limits or proof of improvement over Python.
+
 The existing source is pinned to commit
 `aa7f3720c42856f0e1d18742f78fba156227ee79`, blob
 `54bf6226eb80d1ef6c4f6087fb02579141ab134f`.

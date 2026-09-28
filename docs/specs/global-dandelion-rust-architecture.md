@@ -1020,3 +1020,13 @@ Upgrade to published cargo-audit 0.22.2 (lockfile auditing only, no binary-scann
 feature needed), retaining audit as a mandatory gate. Separate advisory and
 license/source checks so both failures are visible. Add extraction, executable
 mode, inner checksum and packaged self-test checks before artifact upload.
+
+Dependency-policy refinement: internal workspace path dependencies also declare
+an exact package version, preserving the wildcard ban without adding an exception.
+Document the GNU/Linux artifact's Ubuntu 24.04/glibc baseline; kernel support alone
+does not imply that a dynamic binary runs on every older Linux distribution.
+
+Benchmark wiring refinement: the x86_64 quality job executes the packet Criterion
+benchmark, preserves raw encode/decode estimates in its checksummed artifact,
+and rejects missing measurements. Shared-runner timings are not the controlled
+Python-vs-Rust cutover report required by section 32.

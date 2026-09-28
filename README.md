@@ -16,6 +16,8 @@ No speedup over Python is claimed without the controlled baseline comparison.
 
 Requirements: Linux kernel 5.6+ (`openat2`), an x86_64 or aarch64 host, and Rust
 1.98.1 when building from source. No root privileges are required.
+The current GNU/Linux CI binaries are built/tested on Ubuntu 24.04 and require
+a compatible glibc userspace; they are not static musl binaries or macOS builds.
 
 Prefer the binary artifacts from a **successful** `Rust CLI Quality` Actions run.
 Each includes a platform-specific `.tar.gz` and its `.sha256` file.

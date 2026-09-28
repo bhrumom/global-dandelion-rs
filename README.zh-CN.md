@@ -13,7 +13,7 @@
 
 可执行文件名为 `dandelion`。支持标准子命令、帮助、版本、Shell 补全、JSON 结果、结构化日志、配置验证、只读扫描、可取消任务、严格数据包校验与本地自检。
 
-支持 Linux x86_64 和 ARM64；文件安全打开需要 Linux 5.6+ 的 `openat2`。无需 root，不会修改系统时间、修改网络、重命名源文件或自动扫描所有硬盘。
+支持 Linux x86_64 和 ARM64；当前 GNU/Linux 产物在 Ubuntu 24.04 上构建验收，需要兼容的 glibc 用户空间，不是静态 musl 或 macOS 二进制。文件安全打开需要 Linux 5.6+ 的 `openat2`。无需 root，不会修改系统时间、修改网络、重命名源文件或自动扫描所有硬盘。
 
 ```sh
 dandelion --help

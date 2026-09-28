@@ -55,6 +55,9 @@ jobs:
           cat acceptance-${{ matrix.target }}.json
       - name: Release storage preflight
         run: python3 scripts/disk_guard.py --planned-bytes 3221225472
+      - name: Controlled packet microbenchmark
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: cargo bench --locked -p dandelion-packet --bench packet -- --sample-size 20 --measurement-time 1 --warm-up-time 1
       - name: Build reproducible-input release artifact
         run: |
           cargo build --locked --release -p dandelion-app
@@ -64,7 +67,13 @@ jobs:
           cp Cargo.lock dist/
           { printf 'git_sha=%s\n' "$GITHUB_SHA"; rustc -Vv; cargo -V; } > dist/BUILD-INFO.txt
           cp acceptance-${{ matrix.target }}.json dist/
+          if [ "${{ matrix.target }}" = x86_64-unknown-linux-gnu ]; then
+            python3 scripts/benchmark_report.py > dist/packet-benchmark.json
+          fi
           (cd dist && sha256sum dandelion Cargo.lock BUILD-INFO.txt acceptance-*.json > SHA256SUMS)
+          if [ -f dist/packet-benchmark.json ]; then
+            (cd dist && sha256sum packet-benchmark.json >> SHA256SUMS)
+          fi
           tar -czf dandelion-${{ matrix.target }}.tar.gz -C dist .
           sha256sum dandelion-${{ matrix.target }}.tar.gz > dandelion-${{ matrix.target }}.tar.gz.sha256
           mkdir package-check
