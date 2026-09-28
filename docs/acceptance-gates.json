@@ -54,6 +54,7 @@
         "successful exact-commit workflow",
         "all four required jobs successful",
         "x86_64 and aarch64 artifacts bind workflow head and BUILD-INFO to tested commit",
+        "packaged python-rust-comparison rust_sha binds the same tested commit",
         "GitHub ZIP digest is recorded",
         "outer checksum, inner SHA256SUMS and packaged self-test verified"
       ],
