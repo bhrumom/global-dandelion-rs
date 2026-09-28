@@ -183,3 +183,5 @@ pub fn read_credential(path: &Path, private: bool) -> Result<Vec<u8>> {
 }
 
 pub mod process;
+
+pub mod legacy_links;

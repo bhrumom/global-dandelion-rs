@@ -269,7 +269,8 @@ security. CSV databases may label an already authorized target; must not generat
 or implicitly authorize arbitrary addresses. Bound input size/rows and malformed
 CIDR handling. Preserve licensing/source provenance of imported datasets.
 
-Rename effect remains disabled by default. Any retained implementation needs a
+The pinned RenamerThread exercises hidden hard/symbolic links, not original filenames.
+This optional link effect remains disabled by default. Any retained implementation needs a
 durable intent journal, no-overwrite rename, exclusion of repo/config/state, safe
 open-handle semantics and crash recovery. Unknown renamed files must not be guessed
 or bulk-renamed. Never alter user data to simulate program progress.

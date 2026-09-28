@@ -257,3 +257,73 @@ fn file_level_resume_skips_only_unchanged_acknowledged_files() {
     assert_eq!(changed["verified_payload_bytes"], 11);
     assert_eq!(changed["files_completed"], 1);
 }
+
+#[test]
+fn native_country_and_link_compatibility_commands() {
+    let d = tempfile::Builder::new()
+        .prefix("dandelion-compat-test-")
+        .tempdir()
+        .unwrap();
+    let locations = d.path().join("locations.csv");
+    let blocks = d.path().join("blocks.csv");
+    std::fs::write(&locations, "geoname_id,country_name\n1,Example\n").unwrap();
+    std::fs::write(&blocks, "network,geoname_id\n10.0.0.0/8,1\n").unwrap();
+    let out = cli(&[
+        "compat",
+        "country-lookup",
+        "--locations",
+        locations.to_str().unwrap(),
+        "--blocks",
+        blocks.to_str().unwrap(),
+        "--address",
+        "10.2.3.4",
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let m: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(m["country"], "Example");
+    assert_eq!(m["authorized"], false);
+    let source = d.path().join("data.bin");
+    std::fs::write(&source, b"original").unwrap();
+    assert_eq!(
+        cli(&[
+            "compat",
+            "link-exercise",
+            "--file",
+            source.to_str().unwrap()
+        ])
+        .status
+        .code(),
+        Some(2)
+    );
+    let out = cli(&[
+        "compat",
+        "link-exercise",
+        "--file",
+        source.to_str().unwrap(),
+        "--cycles",
+        "1",
+        "--interval-ms",
+        "10",
+        "--confirm",
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let j: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(j["phase"], "cleaned");
+    assert_eq!(std::fs::read(&source).unwrap(), b"original");
+    let out = cli(&[
+        "compat",
+        "link-recover",
+        "--journal-directory",
+        j["workspace"].as_str().unwrap(),
+        "--confirm",
+    ]);
+    assert!(out.status.success());
+}

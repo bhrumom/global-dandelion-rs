@@ -61,3 +61,8 @@ File-level resume increment: bounded core checkpoint port, target/certificate/so
 identity scoping, terminal receipt acknowledgement and persisted index. One-pass
 `--resume` skips only unchanged acknowledged files, replays incomplete files whole,
 and conserves durable traffic debt. Byte-level/exactly-once storage is not claimed.
+
+Legacy compatibility increment implements bounded country lookup, exact old packet
+inspection, and explicit private-workspace link exercise/recovery. Source inspection
+corrected the old effect description: links are renamed, not the original filename.
+The unsafe filename-pattern deletion heuristic is not restored.

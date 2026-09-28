@@ -33,6 +33,20 @@ fn load(cli: &Cli, overrides: Overrides) -> Result<dandelion_config::ValidatedCo
 pub fn execute(cli: &Cli) -> Result<u8> {
     match &cli.command {
         Command::Receive(args) => receive(args),
+        Command::Compat { command } => compat(command),
+        Command::Benchmark {
+            command:
+                crate::cli::BenchmarkCommand::LegacyPacket {
+                    iterations,
+                    chunk_bytes,
+                },
+        } => {
+            output::json(&dandelion_compat::packet::benchmark(
+                *iterations,
+                *chunk_bytes,
+            )?)?;
+            Ok(0)
+        }
         Command::Hotspot { command } => hotspot(command),
         Command::Update { command } => update(command),
         Command::Run(args) => {
@@ -386,6 +400,68 @@ fn hotspot(command: &crate::cli::HotspotCommand) -> Result<u8> {
                 .await
             })?;
             output::json(&journal)?;
+        }
+    }
+    Ok(0)
+}
+
+fn compat(command: &crate::cli::CompatCommand) -> Result<u8> {
+    match command {
+        crate::cli::CompatCommand::LinkExercise {
+            file,
+            cycles,
+            interval_ms,
+            confirm,
+        } => {
+            if !confirm {
+                return Err(Error::Config(
+                    "link exercise changes link metadata; pass --confirm explicitly".into(),
+                ));
+            }
+            let file = file.clone();
+            let cycles = *cycles;
+            let interval_ms = *interval_ms;
+            let journal = execution::drive(Duration::from_secs(3), |cancel| async move {
+                tokio::task::spawn_blocking(move || {
+                    dandelion_platform_linux::legacy_links::exercise(
+                        &file,
+                        cycles,
+                        interval_ms,
+                        cancel,
+                    )
+                })
+                .await
+                .map_err(|e| Error::Task(e.to_string()))?
+            })?;
+            output::json(&journal)?;
+        }
+        crate::cli::CompatCommand::LinkRecover {
+            journal_directory,
+            confirm,
+        } => {
+            if !confirm {
+                return Err(Error::Config(
+                    "link recovery requires explicit --confirm".into(),
+                ));
+            }
+            output::json(&dandelion_platform_linux::legacy_links::recover(
+                journal_directory,
+            )?)?;
+        }
+        crate::cli::CompatCommand::PacketInspect { file } => {
+            let bytes = dandelion_updater::read_small(file, 60020)?;
+            output::json(&dandelion_compat::packet::inspect(&bytes)?)?;
+        }
+        crate::cli::CompatCommand::CountryLookup {
+            locations,
+            blocks,
+            address,
+        } => {
+            let locations = dandelion_updater::read_small(locations, 64 * 1024 * 1024)?;
+            let blocks = dandelion_updater::read_small(blocks, 64 * 1024 * 1024)?;
+            output::json(&dandelion_compat::country::lookup(
+                &locations, &blocks, *address,
+            )?)?;
         }
     }
     Ok(0)

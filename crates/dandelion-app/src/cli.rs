@@ -36,6 +36,16 @@ pub enum Command {
     Run(Run),
     /// Receive and verify TLS 1.3 data from authenticated clients (memory receipts).
     Receive(Receive),
+    /// Explicit offline legacy packet and country metadata compatibility.
+    Compat {
+        #[command(subcommand)]
+        command: CompatCommand,
+    },
+    /// Bounded offline benchmarks; never execute the side-effectful Python main.
+    Benchmark {
+        #[command(subcommand)]
+        command: BenchmarkCommand,
+    },
     /// Explicit, journaled NetworkManager AP lifecycle; never runs during transfers.
     Hotspot {
         #[command(subcommand)]
@@ -258,5 +268,46 @@ pub enum HotspotCommand {
         journal_directory: PathBuf,
         #[arg(long)]
         confirm: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CompatCommand {
+    LinkExercise {
+        #[arg(long)]
+        file: PathBuf,
+        #[arg(long, default_value_t = 10)]
+        cycles: u32,
+        #[arg(long, default_value_t = 50)]
+        interval_ms: u64,
+        #[arg(long)]
+        confirm: bool,
+    },
+    LinkRecover {
+        #[arg(long)]
+        journal_directory: PathBuf,
+        #[arg(long)]
+        confirm: bool,
+    },
+    PacketInspect {
+        #[arg(long)]
+        file: PathBuf,
+    },
+    CountryLookup {
+        #[arg(long)]
+        locations: PathBuf,
+        #[arg(long)]
+        blocks: PathBuf,
+        #[arg(long)]
+        address: std::net::IpAddr,
+    },
+}
+#[derive(Debug, Subcommand)]
+pub enum BenchmarkCommand {
+    LegacyPacket {
+        #[arg(long, default_value_t = 50000)]
+        iterations: u32,
+        #[arg(long, default_value_t = 1024)]
+        chunk_bytes: usize,
     },
 }
