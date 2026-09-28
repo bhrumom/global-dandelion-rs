@@ -185,7 +185,6 @@ def validate_current_ci(report, current, review_scope, current_ci_scope, github_
                 f"current-ci artifact {arch}: live artifact workflow head mismatch")
 
 def validate_physical_hotspot(report):
-def validate_physical_hotspot(report):
     env = obj(report.get("environment"), "physical-hotspot.environment")
     text_field(env, "host", "physical-hotspot.environment")
     text_field(env, "kernel", "physical-hotspot.environment")
