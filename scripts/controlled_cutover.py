@@ -160,6 +160,10 @@ def worker_transfer(root: Path, chunk_bytes: int) -> dict:
                     attempted_wire += len(packet)
                     payload_bytes += len(chunk)
                     packets += 1
+                    # Yield without pacing the benchmark so the in-process receiver
+                    # can drain loopback UDP fairly on small-core acceptance hosts.
+                    if packets % 64 == 0:
+                        time.sleep(0)
                     chunk_index += 1
         deadline = time.monotonic() + 1.0
         while received["packets"] < packets and time.monotonic() < deadline:
