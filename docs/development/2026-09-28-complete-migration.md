@@ -241,3 +241,24 @@ Advancing the branch for this verifier change makes run 36458183709 on predecess
 `2bdf760e83880172be2ccb5548af84b1b2756d6f` historical for final current-ci
 purposes even if that run completes green. Full replacement remains false; fresh
 exact-HEAD CI and external hardware/cutover/release-trust evidence are still required.
+
+
+## Live GitHub Actions binding for current-ci
+
+A continuation audit of evidence contract v3 found one remaining report-substitution
+gap: `current-ci` validated run/job/artifact fields only from the gate report. The
+review attestation cryptographically bound that report body, but the verifier did not
+independently prove that the named Actions run and artifact metadata actually existed.
+
+Evidence contract v4 closes that gap. `check_parity.py --require-complete` now
+re-fetches the configured canonical Actions run, requires a successful PR #1 run on
+the exact tested commit and `.github/workflows/ci.yml`, re-fetches all four required
+jobs, and matches both native artifact IDs/names/GitHub ZIP digests/workflow heads to
+live GitHub artifact metadata. The synthetic evidence test now includes stale-head,
+non-PR-run and live-artifact-digest mismatch negatives.
+
+Because this verifier change advances the branch, exact-HEAD run 36458887843 on
+`bfc071bc376bac92bc8d03b29ca2ad40b2759d23` becomes historical for final
+`current-ci` purposes even if it completes green. A fresh exact-HEAD run and freshly
+downloaded/inspected artifacts are required. Full replacement remains false until all
+five real gates and canonical independent APPROVED attestations exist.

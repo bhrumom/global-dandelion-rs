@@ -406,3 +406,35 @@ the review, then requires the fetched GitHub review's `pull_request_url` to equa
 the canonical PR API URL. The synthetic contract test includes both replay negatives.
 This closes cross-repository/cross-PR reviewer-attestation substitution without
 claiming that GitHub identity alone proves the truth of physical observations.
+
+
+### Live current-CI resolution (evidence contract v4)
+
+A report-level `workflow.run_id`, job result, or artifact digest is not sufficient proof by
+itself because those fields can be copied into a handwritten JSON report. For the
+`current-ci` gate, real `--require-complete` verification MUST resolve the configured
+canonical GitHub repository again and verify the reported Actions run from GitHub.
+
+The live run MUST be a completed successful `pull_request` run for canonical PR #1,
+have `head_sha` equal to the exact tested commit, and execute
+`.github/workflows/ci.yml`. The verifier MUST re-fetch the run's jobs and require
+exactly one successful x86_64 quality job, aarch64 quality job, dependency-policy job,
+and required-acceptance-gate job.
+
+For each required native artifact, the report's artifact ID and name MUST resolve in
+that same run. GitHub's live artifact metadata MUST report a non-expired, non-empty
+artifact whose `digest` equals the report's GitHub ZIP SHA-256 and whose workflow
+run ID/head SHA bind the same exact run and tested commit. Inner archive, packaged
+binary, BUILD-INFO and comparison digests remain independently inspected report
+material and are still bound by the reviewer attestation.
+
+Synthetic contract tests inject a fake Actions API resolver only to exercise positive
+and negative verifier behavior. Real full-replacement verification uses the live
+GitHub API. Tests MUST reject a stale live head, a non-PR run, and a mismatched live
+artifact ZIP digest.
+
+This is evidence contract v4. It closes the remaining path where `current-ci` could
+look structurally valid while its Actions facts existed only in a handwritten report.
+Physical hotspot, hotplug, cutover observations and production trust still require
+real execution plus independent review; GitHub metadata is not treated as proof of
+physical events.

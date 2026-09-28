@@ -10,10 +10,14 @@ from check_parity import ROOT, validate_external_evidence
 
 gates = json.loads((ROOT / "docs/acceptance-gates.json").read_text())
 current = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+synthetic_github_fetcher = None
 
 def expect_failure(path: Path, message: str, review_fetcher) -> None:
     try:
-        validate_external_evidence(path, current, gates, review_fetcher=review_fetcher)
+        validate_external_evidence(
+            path, current, gates, review_fetcher=review_fetcher,
+            github_fetcher=synthetic_github_fetcher,
+        )
     except RuntimeError:
         return
     raise RuntimeError(f"evidence verifier accepted invalid case: {message}")
@@ -193,9 +197,70 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
         }
     def fetch_review(reference):
         return review_records[reference]
+
+    current_ci_report = json.loads(report_paths["current-ci"].read_text())
+    current_ci_run_id = current_ci_report["workflow"]["run_id"]
+    api_base = f"https://api.github.com/repos/{review_repository}"
+    run_url = f"{api_base}/actions/runs/{current_ci_run_id}"
+    jobs_url = f"{api_base}/actions/runs/{current_ci_run_id}/jobs?per_page=100"
+    artifacts_url = f"{api_base}/actions/runs/{current_ci_run_id}/artifacts?per_page=100"
+    api_records = {
+        run_url: {
+            "id": current_ci_run_id,
+            "status": "completed",
+            "conclusion": "success",
+            "head_sha": current,
+            "event": "pull_request",
+            "path": gates["evidence_contract"]["current_ci_scope"]["workflow_path"],
+            "repository": {"full_name": review_repository},
+            "pull_requests": [{"number": review_pr}],
+        },
+        jobs_url: {
+            "jobs": [
+                {"name": "Quality / x86_64-unknown-linux-gnu", "status": "completed", "conclusion": "success"},
+                {"name": "Quality / aarch64-unknown-linux-gnu", "status": "completed", "conclusion": "success"},
+                {"name": "Dependency policy", "status": "completed", "conclusion": "success"},
+                {"name": "Required acceptance gate", "status": "completed", "conclusion": "success"},
+            ]
+        },
+        artifacts_url: {
+            "artifacts": [
+                {
+                    "id": item["artifact_id"],
+                    "name": item["artifact_name"],
+                    "size_in_bytes": 1,
+                    "expired": False,
+                    "digest": f"sha256:{item['github_zip_sha256']}",
+                    "workflow_run": {"id": current_ci_run_id, "head_sha": current},
+                }
+                for item in current_ci_report["artifacts"]
+            ]
+        },
+    }
+    def fetch_api(reference):
+        return api_records[reference]
+    synthetic_github_fetcher = fetch_api
+
     manifest = root / "manifest.json"
     manifest.write_text(json.dumps(proof, indent=2) + "\n")
-    validate_external_evidence(manifest, current, gates, review_fetcher=fetch_review)
+    validate_external_evidence(
+        manifest, current, gates, review_fetcher=fetch_review, github_fetcher=fetch_api
+    )
+
+    saved_head = api_records[run_url]["head_sha"]
+    api_records[run_url]["head_sha"] = "0" * 40
+    expect_failure(manifest, "current-ci report replayed against a different live workflow head", fetch_review)
+    api_records[run_url]["head_sha"] = saved_head
+
+    saved_event = api_records[run_url]["event"]
+    api_records[run_url]["event"] = "push"
+    expect_failure(manifest, "current-ci report used a non-PR live workflow run", fetch_review)
+    api_records[run_url]["event"] = saved_event
+
+    saved_digest = api_records[artifacts_url]["artifacts"][0]["digest"]
+    api_records[artifacts_url]["artifacts"][0]["digest"] = "sha256:" + ("f" * 64)
+    expect_failure(manifest, "current-ci report GitHub ZIP digest did not match live artifact metadata", fetch_review)
+    api_records[artifacts_url]["artifacts"][0]["digest"] = saved_digest
 
     first = gates["required_gates"][0]["id"]
     saved = report_paths[first].read_bytes()
@@ -278,4 +343,5 @@ print(json.dumps({
     "synthetic_only": True,
     "gate_specific_semantics": True,
     "cross_gate_artifact_binding": True,
+    "live_current_ci_metadata": True,
 }))

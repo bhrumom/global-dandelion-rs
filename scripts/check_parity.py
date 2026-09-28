@@ -89,15 +89,57 @@ def sha256_field(value, key, label):
     require(HEX64.fullmatch(actual) is not None, f"{label}.{key}: SHA-256 required")
     return actual.lower()
 
-def validate_current_ci(report, current):
+def validate_current_ci(report, current, review_scope, current_ci_scope, github_fetcher=None):
     workflow = obj(report.get("workflow"), "current-ci.workflow")
-    positive_int_field(workflow, "run_id", "current-ci.workflow")
+    run_id = positive_int_field(workflow, "run_id", "current-ci.workflow")
     require(text_field(workflow, "conclusion", "current-ci.workflow") == "success",
             "current-ci.workflow.conclusion: must be success")
     exact_commit(workflow, "tested_commit", "current-ci.workflow", current)
     jobs = obj(report.get("jobs"), "current-ci.jobs")
-    for name in ("quality_x86_64", "quality_aarch64", "dependency_policy", "required_acceptance_gate"):
+    report_job_keys = ("quality_x86_64", "quality_aarch64", "dependency_policy", "required_acceptance_gate")
+    for name in report_job_keys:
         require(jobs.get(name) == "success", f"current-ci.jobs.{name}: must be success")
+
+    scope = obj(review_scope, "evidence_contract.review_scope")
+    repository = text_field(scope, "repository", "evidence_contract.review_scope")
+    pull_request = positive_int_field(scope, "pull_request", "evidence_contract.review_scope")
+    ci_scope = obj(current_ci_scope, "evidence_contract.current_ci_scope")
+    workflow_path = text_field(ci_scope, "workflow_path", "evidence_contract.current_ci_scope")
+    api = github_fetcher or (lambda reference: fetch_github_json(reference, "current-ci GitHub API"))
+    api_base = f"https://api.github.com/repos/{repository}"
+
+    live_run = api(f"{api_base}/actions/runs/{run_id}")
+    require(isinstance(live_run, dict), "current-ci: GitHub workflow run must be an object")
+    require(live_run.get("id") == run_id, "current-ci: live workflow run ID mismatch")
+    require(live_run.get("status") == "completed", "current-ci: live workflow run is not completed")
+    require(live_run.get("conclusion") == "success", "current-ci: live workflow run did not succeed")
+    require(live_run.get("head_sha") == current, "current-ci: live workflow run is not exact tested commit")
+    require(live_run.get("event") == "pull_request", "current-ci: live workflow run must be a pull_request run")
+    require(live_run.get("path") == workflow_path, "current-ci: live workflow path mismatch")
+    live_repository = obj(live_run.get("repository"), "current-ci live workflow repository")
+    require(text_field(live_repository, "full_name", "current-ci live workflow repository").casefold()
+            == repository.casefold(), "current-ci: live workflow repository mismatch")
+    pull_requests = arr(live_run.get("pull_requests"), "current-ci live workflow pull_requests")
+    require(any(isinstance(item, dict) and item.get("number") == pull_request for item in pull_requests),
+            "current-ci: live workflow run is not bound to configured pull request")
+
+    live_jobs_response = api(f"{api_base}/actions/runs/{run_id}/jobs?per_page=100")
+    live_jobs = arr(obj(live_jobs_response, "current-ci live jobs response").get("jobs"),
+                    "current-ci live jobs")
+    required_live_jobs = {
+        "Quality / x86_64-unknown-linux-gnu": "quality_x86_64",
+        "Quality / aarch64-unknown-linux-gnu": "quality_aarch64",
+        "Dependency policy": "dependency_policy",
+        "Required acceptance gate": "required_acceptance_gate",
+    }
+    for live_name, report_key in required_live_jobs.items():
+        matches = [item for item in live_jobs if isinstance(item, dict) and item.get("name") == live_name]
+        require(len(matches) == 1, f"current-ci: expected exactly one live job {live_name}")
+        require(matches[0].get("status") == "completed" and matches[0].get("conclusion") == "success",
+                f"current-ci: live job {live_name} did not succeed")
+        require(jobs.get(report_key) == "success",
+                f"current-ci.jobs.{report_key}: report/live job mismatch")
+
     artifacts = arr(report.get("artifacts"), "current-ci.artifacts")
     by_arch = {}
     for item in artifacts:
@@ -107,12 +149,16 @@ def validate_current_ci(report, current):
         by_arch[arch] = item
     expected = {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"}
     require(expected <= set(by_arch), "current-ci: both native architecture artifacts are required")
+
+    live_artifacts_response = api(f"{api_base}/actions/runs/{run_id}/artifacts?per_page=100")
+    live_artifacts = arr(obj(live_artifacts_response, "current-ci live artifacts response").get("artifacts"),
+                         "current-ci live artifacts")
     for arch in sorted(expected):
         item = by_arch[arch]
-        positive_int_field(item, "artifact_id", f"current-ci artifact {arch}")
+        artifact_id = positive_int_field(item, "artifact_id", f"current-ci artifact {arch}")
         name = text_field(item, "artifact_name", f"current-ci artifact {arch}")
         require(current in name, f"current-ci artifact {arch}: artifact name must contain tested commit")
-        sha256_field(item, "github_zip_sha256", f"current-ci artifact {arch}")
+        github_zip_sha256 = sha256_field(item, "github_zip_sha256", f"current-ci artifact {arch}")
         sha256_field(item, "outer_archive_sha256", f"current-ci artifact {arch}")
         sha256_field(item, "binary_sha256", f"current-ci artifact {arch}")
         exact_commit(item, "workflow_head_commit", f"current-ci artifact {arch}", current)
@@ -122,6 +168,23 @@ def validate_current_ci(report, current):
         bool_field(item, "inner_sha256sums_verified", f"current-ci artifact {arch}")
         bool_field(item, "self_test_passed", f"current-ci artifact {arch}")
 
+        matches = [entry for entry in live_artifacts
+                   if isinstance(entry, dict) and entry.get("id") == artifact_id]
+        require(len(matches) == 1, f"current-ci artifact {arch}: live artifact ID not found uniquely")
+        live = matches[0]
+        require(live.get("name") == name, f"current-ci artifact {arch}: live artifact name mismatch")
+        require(live.get("expired") is False, f"current-ci artifact {arch}: live artifact is expired")
+        require(isinstance(live.get("size_in_bytes"), int) and live.get("size_in_bytes") > 0,
+                f"current-ci artifact {arch}: live artifact is empty")
+        require(str(live.get("digest", "")).lower() == f"sha256:{github_zip_sha256}".lower(),
+                f"current-ci artifact {arch}: live GitHub ZIP digest mismatch")
+        live_workflow = obj(live.get("workflow_run"), f"current-ci artifact {arch} live workflow")
+        require(live_workflow.get("id") == run_id,
+                f"current-ci artifact {arch}: live artifact belongs to different workflow run")
+        require(live_workflow.get("head_sha") == current,
+                f"current-ci artifact {arch}: live artifact workflow head mismatch")
+
+def validate_physical_hotspot(report):
 def validate_physical_hotspot(report):
     env = obj(report.get("environment"), "physical-hotspot.environment")
     text_field(env, "host", "physical-hotspot.environment")
@@ -268,9 +331,9 @@ def validate_cross_gate_bindings(reports, current):
                 f"controlled-cutover.{cutover_key}: must match current-ci artifact {ci_key}")
     exact_commit(cutover, "artifact_workflow_head_commit", "controlled-cutover", current)
 
-def validate_gate_semantics(gate_id, report, current):
+def validate_gate_semantics(gate_id, report, current, review_scope, current_ci_scope, github_fetcher=None):
     if gate_id == "current-ci":
-        validate_current_ci(report, current)
+        validate_current_ci(report, current, review_scope, current_ci_scope, github_fetcher)
     elif gate_id == "physical-hotspot":
         validate_physical_hotspot(report)
     elif gate_id == "physical-hotplug":
@@ -282,9 +345,8 @@ def validate_gate_semantics(gate_id, report, current):
     else:
         raise RuntimeError(f"unknown acceptance gate {gate_id}")
 
-def fetch_github_review(reference: str) -> dict:
-    match = GITHUB_REVIEW_API.fullmatch(reference)
-    require(match is not None, "review_reference: GitHub pull-request review API URL required")
+def fetch_github_json(reference: str, label: str):
+    require(reference.startswith("https://api.github.com/repos/"), f"{label}: canonical GitHub repository API URL required")
     request = urlrequest.Request(
         reference,
         headers={
@@ -298,18 +360,25 @@ def fetch_github_review(reference: str) -> dict:
         request.add_header("Authorization", f"Bearer {token}")
     try:
         with urlrequest.urlopen(request, timeout=15) as response:
-            require(getattr(response, "status", 200) == 200, "review_reference: GitHub review lookup did not return 200")
-            raw = response.read(1_048_577)
+            require(getattr(response, "status", 200) == 200, f"{label}: GitHub lookup did not return 200")
+            require(response.geturl() == reference, f"{label}: redirected GitHub API response rejected")
+            raw = response.read(4_194_305)
     except (urlerror.HTTPError, urlerror.URLError, TimeoutError, OSError) as error:
-        raise RuntimeError(f"review_reference: cannot verify GitHub review: {error}") from error
-    require(len(raw) <= 1_048_576, "review_reference: GitHub review response too large")
-    review = load_json_bytes(raw, "GitHub review")
+        raise RuntimeError(f"{label}: cannot verify GitHub API resource: {error}") from error
+    require(len(raw) <= 4_194_304, f"{label}: GitHub API response too large")
+    return load_json_bytes(raw, label)
+
+
+def fetch_github_review(reference: str) -> dict:
+    match = GITHUB_REVIEW_API.fullmatch(reference)
+    require(match is not None, "review_reference: GitHub pull-request review API URL required")
+    review = fetch_github_json(reference, "GitHub review")
     require(isinstance(review, dict), "review_reference: GitHub review must be an object")
     require(review.get("id") == int(match.group(4)), "review_reference: GitHub review ID mismatch")
     return review
 
 
-def validate_review_binding(gate_id, proof, report, digest, current, review_scope, review_fetcher=None):
+def validate_review_binding(def validate_review_binding(gate_id, proof, report, digest, current, review_scope, review_fetcher=None):
     performer = text_field(report, "performed_by", f"{gate_id} report")
     actor = text_field(report, "performed_actor", f"{gate_id} report")
     reviewer = text_field(proof, "reviewed_by", f"{gate_id} evidence")
@@ -361,12 +430,14 @@ def validate_review_binding(gate_id, proof, report, digest, current, review_scop
     require(attestation.get("decision") == "approve", f"{gate_id}: review attestation decision must be approve")
 
 
-def validate_external_evidence(evidence_path: Path, current: str, gates: dict, review_fetcher=None) -> None:
+def validate_external_evidence(evidence_path: Path, current: str, gates: dict, review_fetcher=None, github_fetcher=None) -> None:
     contract = gates.get("evidence_contract", {})
     require(contract.get("hash_algorithm") == "sha256", "unsupported evidence hash contract")
     review_scope = obj(contract.get("review_scope"), "evidence_contract.review_scope")
     text_field(review_scope, "repository", "evidence_contract.review_scope")
     positive_int_field(review_scope, "pull_request", "evidence_contract.review_scope")
+    current_ci_scope = obj(contract.get("current_ci_scope"), "evidence_contract.current_ci_scope")
+    text_field(current_ci_scope, "workflow_path", "evidence_contract.current_ci_scope")
     manifest_limit = int(contract.get("max_manifest_bytes", 0))
     report_limit = int(contract.get("max_report_bytes", 0))
     raw = read_bounded_regular(evidence_path, manifest_limit, "evidence manifest")
@@ -402,7 +473,7 @@ def validate_external_evidence(evidence_path: Path, current: str, gates: dict, r
         require(report.get("tested_commit") == current, f"{gate_id}: stale/wrong report commit")
         require(report.get("result") == "pass", f"{gate_id}: report result is not pass")
         validate_review_binding(gate_id, proof, report, digest, current, review_scope, review_fetcher)
-        validate_gate_semantics(gate_id, report, current)
+        validate_gate_semantics(gate_id, report, current, review_scope, current_ci_scope, github_fetcher)
         reports[gate_id] = report
     validate_cross_gate_bindings(reports, current)
 
