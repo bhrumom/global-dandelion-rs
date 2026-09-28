@@ -110,6 +110,7 @@ def validate_current_ci(report, current):
         sha256_field(item, "github_zip_sha256", f"current-ci artifact {arch}")
         exact_commit(item, "workflow_head_commit", f"current-ci artifact {arch}", current)
         exact_commit(item, "build_info_commit", f"current-ci artifact {arch}", current)
+        exact_commit(item, "comparison_commit", f"current-ci artifact {arch}", current)
         bool_field(item, "outer_archive_checksum_verified", f"current-ci artifact {arch}")
         bool_field(item, "inner_sha256sums_verified", f"current-ci artifact {arch}")
         bool_field(item, "self_test_passed", f"current-ci artifact {arch}")
