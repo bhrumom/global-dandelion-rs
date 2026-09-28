@@ -92,10 +92,10 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
     if let Some(lease) = &lease {
         config.pacing.traffic_limit_bytes = lease.bytes();
     }
-    if config.state.enabled {
-        if let Some(name) = config.state.directory.file_name().and_then(|s| s.to_str()) {
-            config.scanner.excluded_names.push(name.into());
-        }
+    if config.state.enabled
+        && let Some(name) = config.state.directory.file_name().and_then(|s| s.to_str())
+    {
+        config.scanner.excluded_names.push(name.into());
     }
     let deadline = Duration::from_millis(config.runtime.shutdown_timeout_ms);
     let result = drive(deadline, |cancel| async move {

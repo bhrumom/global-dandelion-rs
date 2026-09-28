@@ -27,3 +27,7 @@ code and runs; unimplemented domains and hardware/performance gates remain open.
   binary main reduced to parsing/log initialization/error mapping.
 
 Tests and CI must be validated on the new exact revision before reporting success.
+
+CI run 36426448387: dependency audit passed; native jobs stopped at a Clippy
+collapsible-if lint in the new state adapter. Repairing the code without weakening
+the lint gate; behavioral tests have not yet been claimed for this increment.

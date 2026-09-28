@@ -78,10 +78,10 @@ impl<G: WriteGuard> Store<G> {
         let directory = fs::canonicalize(directory)?;
         guard.check(&directory, 2 * MAX_STATE)?;
         let lock_path = directory.join("writer.lock");
-        if let Ok(m) = fs::symlink_metadata(&lock_path) {
-            if !m.is_file() || m.file_type().is_symlink() || m.nlink() != 1 {
-                return Err(Error::State("unsafe state lock".into()));
-            }
+        if let Ok(m) = fs::symlink_metadata(&lock_path)
+            && (!m.is_file() || m.file_type().is_symlink() || m.nlink() != 1)
+        {
+            return Err(Error::State("unsafe state lock".into()));
         }
         let lock = OpenOptions::new()
             .read(true)

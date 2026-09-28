@@ -190,10 +190,8 @@ pub fn authorized_mount_roots(table: &[Mount], prefixes: &[PathBuf]) -> Result<V
 }
 pub fn parse_established(text: &str) -> Result<u64> {
     let mut count = 0;
-    let mut rows = 0;
-    for line in text.lines().skip(1) {
-        rows += 1;
-        if rows > 100_000 {
+    for (rows, line) in text.lines().skip(1).enumerate() {
+        if rows >= 100_000 {
             return Err(Error::Platform("connection table exceeds cap".into()));
         }
         let fields: Vec<_> = line.split_whitespace().collect();

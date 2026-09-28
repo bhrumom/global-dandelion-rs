@@ -128,11 +128,11 @@ impl Supervisor {
             snapshot.accepted_wire_bytes += receipt.accepted_wire_bytes;
             snapshot.verified_payload_bytes += receipt.verified_payload_bytes;
             snapshot.chunks_sent += 1;
-            if let Some(observer) = &self.observer {
-                observer.send_replace(snapshot.clone());
-            }
             if chunk.last {
                 snapshot.files_completed += 1;
+            }
+            if let Some(observer) = &self.observer {
+                observer.send_replace(snapshot.clone());
             }
         }
         Ok(())
