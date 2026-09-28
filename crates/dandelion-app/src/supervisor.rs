@@ -36,8 +36,19 @@ impl Supervisor {
     /// Injection point for deterministic transport failure/backpressure tests.
     pub async fn run_with_transport<T: Transport>(
         self,
+        transport: T,
+        cancel: CancellationToken,
+    ) -> Result<Snapshot> {
+        let cfg = self.config.get();
+        let mut rate = TokenBucket::new(cfg.pacing.bytes_per_second, cfg.pacing.burst_bytes)?;
+        self.run_with_transport_and_rate(transport, cancel, &mut rate)
+            .await
+    }
+    pub async fn run_with_transport_and_rate<T: Transport>(
+        self,
         mut transport: T,
         cancel: CancellationToken,
+        rate: &mut TokenBucket,
     ) -> Result<Snapshot> {
         let started = Instant::now();
         let cfg = self.config.get();
@@ -67,8 +78,8 @@ impl Supervisor {
             queue_capacity = cfg.runtime.queue_capacity,
             "pipeline_started"
         );
-        let sent = self
-            .consume(&mut rx, &mut transport, &cancel, &mut snapshot)
+        let mut sent = self
+            .consume(&mut rx, &mut transport, &cancel, &mut snapshot, rate)
             .await;
         // Close the blocking producer's output BEFORE waiting for its completion.
         rx.close();
@@ -86,6 +97,9 @@ impl Supervisor {
                 return Err(Error::ShutdownTimeout);
             }
         };
+        if sent.is_ok() && scan.is_ok() {
+            sent = tokio::select! {biased;_=cancel.cancelled()=>Err(Error::Cancelled),result=transport.finish(&cancel)=>result};
+        }
         match sent {
             Ok(()) => {
                 snapshot.skipped_entries = scan?.skipped_entries;
@@ -105,10 +119,10 @@ impl Supervisor {
         transport: &mut T,
         cancel: &CancellationToken,
         snapshot: &mut Snapshot,
+        rate: &mut TokenBucket,
     ) -> Result<()> {
         let cfg = self.config.get();
         let mut budget = TrafficBudget::new(cfg.pacing.traffic_limit_bytes)?;
-        let mut rate = TokenBucket::new(cfg.pacing.bytes_per_second, cfg.pacing.burst_bytes)?;
         let mut encoded = Vec::with_capacity(MAX_DATAGRAM_BYTES);
         loop {
             let chunk = tokio::select! { biased;

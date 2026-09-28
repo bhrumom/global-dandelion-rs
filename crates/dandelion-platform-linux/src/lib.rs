@@ -156,3 +156,28 @@ mod tests {
 }
 
 pub mod inventory;
+
+/// Bounded credential input. File paths are configuration, never secret contents;
+/// private keys must be regular, non-symlink, non-hardlinked and mode 0600 or 0400.
+pub fn read_credential(path: &Path, private: bool) -> Result<Vec<u8>> {
+    let fd = rustix::fs::open(
+        path,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK,
+        Mode::empty(),
+    )
+    .map_err(std::io::Error::from)?;
+    let file = File::from(fd);
+    let metadata = file.metadata()?;
+    if !metadata.is_file()
+        || metadata.len() > 1024 * 1024
+        || (private && (metadata.mode() & 0o077 != 0 || metadata.nlink() != 1))
+    {
+        return Err(Error::Config("credentials must be bounded regular files; private keys require private permissions and no hard links".into()));
+    }
+    let mut bytes = Vec::new();
+    file.take(1024 * 1024 + 1).read_to_end(&mut bytes)?;
+    if bytes.len() > 1024 * 1024 {
+        return Err(Error::Config("credential file exceeded size limit".into()));
+    }
+    Ok(bytes)
+}

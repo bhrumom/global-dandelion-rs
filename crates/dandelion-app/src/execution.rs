@@ -74,6 +74,29 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
         dandelion_tui::check_terminal()?;
     }
     let mut config = validated.get().clone();
+    let tls_config = if matches!(config.transport.mode, dandelion_config::Mode::Tls)
+        && !options.surface
+    {
+        let tls = &config.transport.tls;
+        let ca = dandelion_platform_linux::read_credential(&tls.ca_file, false)?;
+        let certificate = dandelion_platform_linux::read_credential(&tls.certificate_file, false)?;
+        let key = dandelion_platform_linux::read_credential(&tls.private_key_file, true)?;
+        for path in [&tls.ca_file, &tls.certificate_file, &tls.private_key_file] {
+            let name = path.file_name().and_then(|s| s.to_str()).ok_or_else(|| {
+                Error::Config(
+                    "TLS credential filenames must be representable in the exclusion policy".into(),
+                )
+            })?;
+            config.scanner.excluded_names.push(name.into());
+        }
+        Some(dandelion_transport::tls::client_config(
+            &ca,
+            &certificate,
+            &key,
+        )?)
+    } else {
+        None
+    };
     let mut state = if config.state.enabled && !options.surface {
         Some(dandelion_state::Store::open(
             &config.state.directory,
@@ -106,7 +129,7 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
             let child = ui_cancel.clone();
             tokio::task::spawn_blocking(move || dandelion_tui::observe(rx, child))
         });
-        let output = service(config, options, cancel, tx).await;
+        let output = service(config, options, cancel, tx, tls_config).await;
         ui_cancel.cancel();
         if let Some(ui) = ui {
             tokio::time::timeout(deadline, ui)
@@ -129,11 +152,22 @@ async fn service(
     options: RunOptions,
     cancel: CancellationToken,
     observer: tokio::sync::watch::Sender<Snapshot>,
+    tls_config: Option<std::sync::Arc<rustls::ClientConfig>>,
 ) -> Result<Snapshot> {
     let started = Instant::now();
     let mut total = Snapshot::default();
     let mut cycles = 0u32;
     let mut last_mounts = Vec::new();
+    let mut rate = dandelion_pacing::TokenBucket::new(
+        config.pacing.bytes_per_second,
+        config.pacing.burst_bytes,
+    )?;
+    let meter = dandelion_transport::metered::WireBudget::new(
+        config.pacing.traffic_limit_bytes,
+        config.pacing.bytes_per_second,
+        config.pacing.burst_bytes,
+    )?;
+    meter.set_schedule(config.pacing.schedule.clone())?;
     loop {
         if cancel.is_cancelled() {
             total.status = RunStatus::Cancelled;
@@ -173,13 +207,45 @@ async fn service(
         }
         cycle.pacing.traffic_limit_bytes = remaining;
         let supervisor = Supervisor::new(cycle.validate()?)?.with_observer(observer.clone());
-        let stats = if options.surface {
+        let before = meter.totals()?;
+        let mut stats = if options.surface {
             supervisor
-                .run_with_transport(dandelion_transport::ReadVerifier, cancel.clone())
+                .run_with_transport_and_rate(
+                    dandelion_transport::ReadVerifier,
+                    cancel.clone(),
+                    &mut rate,
+                )
+                .await?
+        } else if let Some(tls_config) = &tls_config {
+            let tls = &config.transport.tls;
+            let peers = dandelion_core::targets::authorize(
+                &tls.peers,
+                tls.wan_enabled,
+                &tls.wan_allowlist,
+            )?;
+            let transport = dandelion_transport::tls::Peers::connect(
+                &peers,
+                tls_config.clone(),
+                meter.clone(),
+                Duration::from_millis(tls.timeout_ms),
+                tls.connect_attempts,
+                &cancel,
+            )
+            .await?;
+            supervisor
+                .run_with_transport_and_rate(transport, cancel.clone(), &mut rate)
                 .await?
         } else {
-            supervisor.run(cancel.clone()).await?
+            let transport = tokio::select! {biased;_=cancel.cancelled()=>return Err(Error::Cancelled),transport=dandelion_transport::Loopback::bind()=>transport?};
+            supervisor
+                .run_with_transport_and_rate(transport, cancel.clone(), &mut rate)
+                .await?
         };
+        if tls_config.is_some() && !options.surface {
+            let after = meter.totals()?;
+            stats.attempted_wire_bytes = after.0 - before.0;
+            stats.accepted_wire_bytes = after.1 - before.1;
+        }
         macro_rules! sum {
             ($field:ident) => {
                 total.$field = total

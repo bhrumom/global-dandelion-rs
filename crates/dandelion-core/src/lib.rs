@@ -1,6 +1,7 @@
 //! Platform-independent transfer values and failure semantics.
 pub mod filesystem;
 pub mod schedule;
+pub mod targets;
 
 use serde::{Deserialize, Serialize};
 use std::{io, path::PathBuf};

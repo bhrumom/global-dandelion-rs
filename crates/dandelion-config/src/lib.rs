@@ -89,12 +89,57 @@ impl Default for Pacing {
 #[serde(default, deny_unknown_fields)]
 pub struct Transport {
     pub mode: Mode,
+    pub tls: Tls,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Tls {
+    pub ca_file: PathBuf,
+    pub certificate_file: PathBuf,
+    pub private_key_file: PathBuf,
+    pub peers: Vec<dandelion_core::targets::Peer>,
+    pub wan_enabled: bool,
+    pub wan_allowlist: Vec<std::net::SocketAddr>,
+    pub timeout_ms: u64,
+    pub connect_attempts: u8,
+}
+impl Default for Tls {
+    fn default() -> Self {
+        Self {
+            ca_file: PathBuf::new(),
+            certificate_file: PathBuf::new(),
+            private_key_file: PathBuf::new(),
+            peers: Vec::new(),
+            wan_enabled: false,
+            wan_allowlist: Vec::new(),
+            timeout_ms: 10000,
+            connect_attempts: 1,
+        }
+    }
+}
+impl Tls {
+    pub fn validate_credentials(&self) -> Result<()> {
+        if [
+            &self.ca_file,
+            &self.certificate_file,
+            &self.private_key_file,
+        ]
+        .iter()
+        .any(|p| p.as_os_str().is_empty())
+            || !(100..=60000).contains(&self.timeout_ms)
+            || !(1..=3).contains(&self.connect_attempts)
+        {
+            return Err(Error::Config("TLS requires CA/certificate/key file paths, timeout 100..60000 ms and 1..3 connect attempts".into()));
+        }
+        Ok(())
+    }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
     #[default]
     Loopback,
+    Tls,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -217,6 +262,14 @@ impl Config {
             return Err(fail(
                 "allowed_mount_prefixes must be absolute non-root paths without '..' (max 64)",
             ));
+        }
+        if matches!(self.transport.mode, Mode::Tls) {
+            self.transport.tls.validate_credentials()?;
+            dandelion_core::targets::authorize(
+                &self.transport.tls.peers,
+                self.transport.tls.wan_enabled,
+                &self.transport.tls.wan_allowlist,
+            )?;
         }
         Ok(ValidatedConfig(self))
     }

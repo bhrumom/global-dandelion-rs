@@ -12,6 +12,10 @@ pub struct Receipt {
 }
 
 pub trait Transport: Send {
+    /// Finish a successful session. Default adapters have no stream to close.
+    fn finish(&mut self, _cancel: &CancellationToken) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
+    }
     fn wire_cost(&self, packet: &[u8]) -> u64 {
         packet.len() as u64
     }
@@ -119,3 +123,6 @@ mod tests {
         ));
     }
 }
+
+pub mod metered;
+pub mod tls;

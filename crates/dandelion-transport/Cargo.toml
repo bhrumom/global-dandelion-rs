@@ -9,6 +9,10 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+tokio-rustls.workspace = true
+rustls.workspace = true
+serde.workspace = true
+blake3.workspace = true
 dandelion-core.workspace = true
 dandelion-packet.workspace = true
 tokio.workspace = true

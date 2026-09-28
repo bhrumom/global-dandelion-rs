@@ -31,3 +31,13 @@ Tests and CI must be validated on the new exact revision before reporting succes
 CI run 36426448387: dependency audit passed; native jobs stopped at a Clippy
 collapsible-if lint in the new state adapter. Repairing the code without weakening
 the lint gate; behavioral tests have not yet been claimed for this increment.
+
+## Validation and authenticated peers
+
+Run 36426655281 at aeb2baf passed both native architectures, dependency policy and
+required gate for the durable/platform/scan/service increment. TLS extension now
+uses rustls/tokio-rustls, exact authorized peers and mutual TLS 1.3. A meter below
+TLS caps handshake and payload ciphertext across peers; a persistent token bucket
+also spans repeated scans. Native receiver sends authenticated data and completion
+receipts. CI generates ephemeral certificates for success, wrong name, untrusted
+client and handshake-budget tests on loopback. New HEAD validation remains required.

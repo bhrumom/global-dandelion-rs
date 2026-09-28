@@ -18,10 +18,11 @@ struct Screen<W: Write> {
     writer: W,
 }
 impl<W: Write> Screen<W> {
-    fn enter(mut writer: W) -> Result<Self> {
-        writer.write_all(b"\x1b[?1049h\x1b[?25l")?;
-        writer.flush()?;
-        Ok(Self { writer })
+    fn enter(writer: W) -> Result<Self> {
+        let mut screen = Self { writer };
+        screen.writer.write_all(b"\x1b[?1049h\x1b[?25l")?;
+        screen.writer.flush()?;
+        Ok(screen)
     }
 }
 impl<W: Write> Drop for Screen<W> {
@@ -32,7 +33,7 @@ impl<W: Write> Drop for Screen<W> {
 }
 pub fn render(snapshot: &Snapshot, elapsed: Duration) -> String {
     format!(
-        "Global Dandelion | {:?}\n\nFiles completed: {}\nChunks verified: {}\nAttempted wire bytes: {}\nAccepted wire bytes: {}\nVerified payload bytes: {}\nElapsed: {:.1}s\n\nCtrl+C to cancel. Source files are read-only.\n",
+        "Global Dandelion | latest snapshot (active until exit) | {:?}\n\nFiles completed: {}\nChunks verified: {}\nAttempted wire bytes: {}\nAccepted wire bytes: {}\nVerified payload bytes: {}\nElapsed: {:.1}s\n\nCtrl+C to cancel. Source files are read-only.\n",
         snapshot.status,
         snapshot.files_completed,
         snapshot.chunks_sent,

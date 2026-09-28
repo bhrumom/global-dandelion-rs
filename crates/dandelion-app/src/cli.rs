@@ -34,6 +34,8 @@ pub enum LogFormat {
 pub enum Command {
     /// Read selected directories once and verify every datagram locally.
     Run(Run),
+    /// Receive and verify TLS 1.3 data from authenticated clients (memory receipts).
+    Receive(Receive),
     /// Read-only Linux inventory or bounded mount-change observations.
     Platform {
         #[command(subcommand)]
@@ -148,4 +150,30 @@ pub enum ScanCommand {
         #[arg(long)]
         rate_bytes_per_second: Option<u64>,
     },
+}
+
+#[derive(Debug, clap::Args)]
+pub struct Receive {
+    #[arg(long, default_value = "127.0.0.1:20000")]
+    pub bind: std::net::SocketAddr,
+    #[arg(long)]
+    pub allow_remote: bool,
+    #[arg(long)]
+    pub allowed_client: Vec<std::net::IpAddr>,
+    #[arg(long)]
+    pub ca_file: PathBuf,
+    #[arg(long)]
+    pub certificate_file: PathBuf,
+    #[arg(long)]
+    pub private_key_file: PathBuf,
+    #[arg(long, default_value_t = 4)]
+    pub max_sessions: usize,
+    #[arg(long)]
+    pub once: bool,
+    #[arg(long, default_value_t = 67108864)]
+    pub traffic_limit_bytes: u64,
+    #[arg(long, default_value_t = 1048576)]
+    pub rate_bytes_per_second: u64,
+    #[arg(long, default_value_t = 10000)]
+    pub timeout_ms: u64,
 }

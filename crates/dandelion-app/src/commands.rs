@@ -32,6 +32,7 @@ fn load(cli: &Cli, overrides: Overrides) -> Result<dandelion_config::ValidatedCo
 }
 pub fn execute(cli: &Cli) -> Result<u8> {
     match &cli.command {
+        Command::Receive(args) => receive(args),
         Command::Run(args) => {
             let cfg = load(cli, args.overrides())?;
             if args.dry_run {
@@ -208,4 +209,64 @@ pub fn execute(cli: &Cli) -> Result<u8> {
             }
         },
     }
+}
+
+fn receive(args: &crate::cli::Receive) -> Result<u8> {
+    if !(1..=16).contains(&args.max_sessions)
+        || !(100..=60000).contains(&args.timeout_ms)
+        || args.traffic_limit_bytes == 0
+        || !(1..=1_073_741_824).contains(&args.rate_bytes_per_second)
+    {
+        return Err(Error::Config(
+            "receiver requires bounded sessions, timeout, rate and positive traffic budget".into(),
+        ));
+    }
+    let mut checked = args.bind;
+    if checked.port() == 0 {
+        checked.set_port(1);
+    }
+    dandelion_core::targets::validate_unicast(checked)?;
+    if !args.bind.ip().is_loopback() && (!args.allow_remote || args.allowed_client.is_empty()) {
+        return Err(Error::Config(
+            "non-loopback listen requires --allow-remote and an explicit --allowed-client list"
+                .into(),
+        ));
+    }
+    let ca = dandelion_platform_linux::read_credential(&args.ca_file, false)?;
+    let cert = dandelion_platform_linux::read_credential(&args.certificate_file, false)?;
+    let key = dandelion_platform_linux::read_credential(&args.private_key_file, true)?;
+    let config = dandelion_transport::tls::server_config(&ca, &cert, &key)?;
+    let report = execution::drive(Duration::from_secs(3), |cancel| async move {
+        let meter = dandelion_transport::metered::WireBudget::new(
+            args.traffic_limit_bytes,
+            args.rate_bytes_per_second,
+            1232,
+        )?;
+        let listener = tokio::net::TcpListener::bind(args.bind).await?;
+        output::json(
+            &serde_json::json!({"event":"ready","address":listener.local_addr()?,"mutual_tls":true}),
+        )?;
+        dandelion_transport::tls::serve(
+            listener,
+            config,
+            meter,
+            dandelion_transport::tls::ReceiveOptions {
+                max_sessions: args.max_sessions,
+                max_connections: args.once.then_some(1),
+                timeout: Duration::from_millis(args.timeout_ms),
+                allowed_clients: args.allowed_client.clone(),
+            },
+            cancel,
+        )
+        .await
+    })?;
+    let code = if report.cancelled {
+        130
+    } else if report.failed_sessions > 0 {
+        4
+    } else {
+        0
+    };
+    output::json(&report)?;
+    Ok(code)
 }
