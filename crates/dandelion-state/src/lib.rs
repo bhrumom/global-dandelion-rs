@@ -11,10 +11,7 @@ use std::{
 const MAX_STATE: u64 = 1024 * 1024;
 const MAX_IMPORTS: usize = 64;
 
-/// Caller supplies capacity policy; no direct platform or transport dependency.
-pub trait WriteGuard: Send {
-    fn check(&self, directory: &Path, additional_peak_bytes: u64) -> Result<()>;
-}
+pub use dandelion_core::storage::WriteGuard;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

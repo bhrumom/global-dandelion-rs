@@ -10,6 +10,11 @@ publish = false
 repository = "https://github.com/bhrumom/global-dandelion-rs"
 
 [workspace.dependencies]
+dandelion-updater = { path = "crates/dandelion-updater", version = "=0.1.0" }
+ring = "0.17.14"
+semver = "1.0.28"
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "rustls"] }
+
 tokio-rustls = { version = "0.26.5", default-features = false, features = ["ring"] }
 rustls = { version = "0.23.44", default-features = false, features = ["ring", "std"] }
 

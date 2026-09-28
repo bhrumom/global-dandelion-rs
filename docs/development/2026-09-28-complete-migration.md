@@ -41,3 +41,9 @@ TLS caps handshake and payload ciphertext across peers; a persistent token bucke
 also spans repeated scans. Native receiver sends authenticated data and completion
 receipts. CI generates ephemeral certificates for success, wrong name, untrusted
 client and handshake-budget tests on loopback. New HEAD validation remains required.
+
+Signed updater increment: Ed25519 exact-byte manifest verification, semantic-version/
+architecture/expiry gates, bounded HTTPS or local input, SHA-256/size validation,
+atomic versioned staging and explicit no-activation semantics. Shared WriteGuard
+moved into core for all writers; state re-exports it without a concrete platform
+dependency. New native offline CLI trust tests use ephemeral signing keys in CI.

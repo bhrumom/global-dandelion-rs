@@ -1,6 +1,7 @@
 //! Platform-independent transfer values and failure semantics.
 pub mod filesystem;
 pub mod schedule;
+pub mod storage;
 pub mod targets;
 
 use serde::{Deserialize, Serialize};

@@ -36,6 +36,11 @@ pub enum Command {
     Run(Run),
     /// Receive and verify TLS 1.3 data from authenticated clients (memory receipts).
     Receive(Receive),
+    /// Verify signed release metadata or stage a verified artifact without activation.
+    Update {
+        #[command(subcommand)]
+        command: UpdateCommand,
+    },
     /// Read-only Linux inventory or bounded mount-change observations.
     Platform {
         #[command(subcommand)]
@@ -176,4 +181,40 @@ pub struct Receive {
     pub rate_bytes_per_second: u64,
     #[arg(long, default_value_t = 10000)]
     pub timeout_ms: u64,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct UpdateTrust {
+    #[arg(
+        long,
+        conflicts_with = "manifest_url",
+        required_unless_present = "manifest_url"
+    )]
+    pub manifest: Option<PathBuf>,
+    #[arg(long)]
+    pub manifest_url: Option<String>,
+    #[arg(long)]
+    pub signature: PathBuf,
+    #[arg(long)]
+    pub public_key: PathBuf,
+    #[arg(long)]
+    pub allow_rollback: bool,
+}
+#[derive(Debug, Subcommand)]
+pub enum UpdateCommand {
+    Check(UpdateTrust),
+    Stage {
+        #[command(flatten)]
+        trust: UpdateTrust,
+        #[arg(long)]
+        directory: PathBuf,
+        #[arg(
+            long,
+            conflicts_with = "allowed_host",
+            required_unless_present = "allowed_host"
+        )]
+        artifact: Option<PathBuf>,
+        #[arg(long)]
+        allowed_host: Option<String>,
+    },
 }

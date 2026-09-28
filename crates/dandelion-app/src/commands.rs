@@ -33,6 +33,7 @@ fn load(cli: &Cli, overrides: Overrides) -> Result<dandelion_config::ValidatedCo
 pub fn execute(cli: &Cli) -> Result<u8> {
     match &cli.command {
         Command::Receive(args) => receive(args),
+        Command::Update { command } => update(command),
         Command::Run(args) => {
             let cfg = load(cli, args.overrides())?;
             if args.dry_run {
@@ -269,4 +270,57 @@ fn receive(args: &crate::cli::Receive) -> Result<u8> {
     };
     output::json(&report)?;
     Ok(code)
+}
+
+fn update(command: &crate::cli::UpdateCommand) -> Result<u8> {
+    use crate::cli::UpdateCommand;
+    let trust = match command {
+        UpdateCommand::Check(trust) | UpdateCommand::Stage { trust, .. } => trust,
+    };
+    let raw = match (&trust.manifest, &trust.manifest_url) {
+        (Some(path), None) => dandelion_updater::read_small(path, 65536)?,
+        (None, Some(url)) => dandelion_updater::fetch_small(url, 65536)?,
+        _ => return Err(Error::Config("choose one manifest source".into())),
+    };
+    let signature = dandelion_updater::read_small(&trust.signature, 64)?;
+    let key = dandelion_updater::read_small(&trust.public_key, 32)?;
+    let target = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
+    let verified = dandelion_updater::verify(
+        &raw,
+        &signature,
+        &key,
+        env!("CARGO_PKG_VERSION"),
+        &target,
+        dandelion_updater::now()?,
+        trust.allow_rollback,
+    )?;
+    match command {
+        UpdateCommand::Check(_) => output::json(verified.manifest())?,
+        UpdateCommand::Stage {
+            directory,
+            artifact,
+            allowed_host,
+            ..
+        } => {
+            let staged = if let Some(path) = artifact {
+                dandelion_updater::stage(
+                    &verified,
+                    std::fs::File::open(path)?,
+                    directory,
+                    &StorageGuard,
+                )?
+            } else {
+                dandelion_updater::stage_download(
+                    &verified,
+                    directory,
+                    allowed_host
+                        .as_deref()
+                        .ok_or_else(|| Error::Config("explicit download host required".into()))?,
+                    &StorageGuard,
+                )?
+            };
+            output::json(&staged)?;
+        }
+    }
+    Ok(0)
 }

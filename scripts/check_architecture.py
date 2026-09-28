@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWED = {
+    "dandelion-updater": {"dandelion-core"},
     "dandelion-state": {"dandelion-core"},
     "dandelion-tui": {"dandelion-core"},
     "dandelion-core": set(),
@@ -17,7 +18,7 @@ ALLOWED = {
     "dandelion-scanner": {"dandelion-core"},
     "dandelion-transport": {"dandelion-core", "dandelion-packet"},
     "dandelion-app": {"dandelion-core", "dandelion-config", "dandelion-packet", "dandelion-pacing",
-                      "dandelion-platform-linux", "dandelion-scanner", "dandelion-transport", "dandelion-state", "dandelion-tui"},
+                      "dandelion-platform-linux", "dandelion-scanner", "dandelion-transport", "dandelion-state", "dandelion-tui", "dandelion-updater"},
 }
 found = set()
 for manifest in sorted((ROOT / "crates").glob("*/Cargo.toml")):
