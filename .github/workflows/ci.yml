@@ -78,7 +78,7 @@ jobs:
           cp target/release/dandelion dist/
           cp Cargo.lock dist/
           python3 scripts/license_report.py
-          python3 scripts/python_comparison.py --binary target/release/dandelion > dist/python-rust-comparison.json
+          python3 scripts/python_comparison.py --binary target/release/dandelion --rust-sha "$TESTED_COMMIT" > dist/python-rust-comparison.json
           { printf 'git_sha=%s\n' "$TESTED_COMMIT"; rustc -Vv; cargo -V; } > dist/BUILD-INFO.txt
           cp acceptance-${{ matrix.target }}.json tls-acceptance-${{ matrix.target }}.json update-acceptance-${{ matrix.target }}.json tui-acceptance-${{ matrix.target }}.json dist/
           if [ "${{ matrix.target }}" = x86_64-unknown-linux-gnu ]; then
