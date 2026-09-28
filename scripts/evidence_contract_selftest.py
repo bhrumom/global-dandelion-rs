@@ -100,7 +100,10 @@ def report_for(gate_id: str) -> dict:
                     "receiver_wire_bytes": payload + 20, "attempted_wire_bytes": payload + 20,
                 })
             else:
-                common.update({"verified_payload_bytes": payload, "failed_sessions": 0})
+                common.update({
+                    "status": "completed", "verified_payload_bytes": payload,
+                    "attempted_wire_bytes": payload + 20, "accepted_wire_bytes": payload + 20,
+                })
             return common
         repeats = 3
         workloads = {}

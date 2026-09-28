@@ -387,8 +387,12 @@ def main() -> None:
                 if sample["verified_payload_bytes"] != payload:
                     raise RuntimeError(f"{language} read workload did not cover the complete payload")
         for sample in samples["transfer"]["rust"]:
+            if sample.get("status") != "completed":
+                raise RuntimeError("Rust transfer did not complete successfully")
             if sample["verified_payload_bytes"] != payload:
                 raise RuntimeError("Rust transfer did not verify the complete payload")
+            if sample.get("accepted_wire_bytes") != sample.get("attempted_wire_bytes"):
+                raise RuntimeError("Rust transfer wire-byte accounting mismatch")
         for sample in samples["transfer"]["python"]:
             if sample["receiver_bad_md5"]:
                 raise RuntimeError("Python legacy transfer receiver observed an MD5 mismatch")

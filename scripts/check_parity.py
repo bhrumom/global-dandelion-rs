@@ -272,10 +272,12 @@ def validate_controlled_cutover(report, current):
         require(row.get("receiver_wire_bytes") == row.get("attempted_wire_bytes"),
                 "controlled-cutover: Python transfer wire-byte mismatch")
     for row in workloads["transfer"]["rust"]["raw"]:
+        require(row.get("status") == "completed",
+                "controlled-cutover: Rust transfer did not complete successfully")
         require(row.get("verified_payload_bytes") == payload,
                 "controlled-cutover: Rust transfer did not verify complete payload")
-        require(row.get("failed_sessions") == 0,
-                "controlled-cutover: Rust transfer reported failed sessions")
+        require(row.get("accepted_wire_bytes") == row.get("attempted_wire_bytes"),
+                "controlled-cutover: Rust transfer wire-byte mismatch")
     shutdown = obj(report.get("shutdown"), "controlled-cutover.shutdown")
     for language in ("python", "rust"):
         rows = arr(obj(shutdown.get(language), f"controlled-cutover.shutdown.{language}").get("raw"),
