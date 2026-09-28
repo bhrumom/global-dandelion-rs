@@ -33,3 +33,13 @@ Remaining acceptance: baseline helper and parity workload comparison, repeated
 long-duration backpressure trials, mutation/drive-unplug fault injection, verified
 external transport, and hardware-controlled CPU/GiB and throughput assessment.
 The engineering targets in the Spec are targets, not measured achievements.
+
+## Equivalent legacy packet comparison
+
+CI now runs scripts/python_comparison.py on the same native runner for Python and
+Rust. It uses the exact reviewed struct.pack + MD5 + payload expression, alternating
+measurement order, identical payload and packet counts, and matching final packet
+hashes. Raw repetitions include encoding elapsed time and GNU-time CPU/peak RSS.
+The report is checksummed in each artifact. It is not a full scanner/network/drive
+cutover comparison; shared-runner values and 0.01-second CPU resolution are explicit.
+No side-effectful Python module is imported or run.

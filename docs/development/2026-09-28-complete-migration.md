@@ -66,3 +66,7 @@ Legacy compatibility increment implements bounded country lookup, exact old pack
 inspection, and explicit private-workspace link exercise/recovery. Source inspection
 corrected the old effect description: links are renamed, not the original filename.
 The unsafe filename-pattern deletion heuristic is not restored.
+
+Acceptance additions: actual isolated PTY terminal entry/restore under SIGTERM and
+an equivalent pure Python/Rust packet benchmark. Neither changes user terminal,
+network configuration or production files. Both run only on disposable CI runners.
