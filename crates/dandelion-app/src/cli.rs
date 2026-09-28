@@ -216,8 +216,14 @@ pub struct UpdateTrust {
     pub manifest: Option<PathBuf>,
     #[arg(long)]
     pub manifest_url: Option<String>,
+    #[arg(
+        long,
+        conflicts_with = "signature_url",
+        required_unless_present = "signature_url"
+    )]
+    pub signature: Option<PathBuf>,
     #[arg(long)]
-    pub signature: PathBuf,
+    pub signature_url: Option<String>,
     #[arg(long)]
     pub public_key: PathBuf,
     #[arg(long)]

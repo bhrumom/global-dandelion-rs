@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily signed release discovery for Global Dandelion
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1d
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

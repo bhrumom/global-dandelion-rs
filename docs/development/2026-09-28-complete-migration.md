@@ -86,3 +86,12 @@ counts and actual ciphertext accepted on that peer's metered socket. Successful
 repeat sessions aggregate these values; failures log the available target snapshot
 instead of pretending completion. Backward-compatible empty fields preserve legacy
 state checksums. Real TLS acceptance checks target/socket totals agree.
+
+Integration record: current production implementation at c9b8cade84cd passed run
+36431323900, including native TLS/clock/target counters and prior acceptance suites.
+Documentation, examples and migration inventory now replace first-slice descriptions.
+The 37 rows distinguish 34 code implementations and 3 deliberate unsafe-default
+exclusions from physical hardware, production trust and full cutover acceptance.
+The complete gate requires external reviewed exact-revision evidence and cannot be
+satisfied merely by a zero-pending code list. New docs/config/CLI changes still
+require a fresh current-revision CI run.

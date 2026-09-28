@@ -421,4 +421,13 @@ mod tests {
         config.runtime.max_pipeline_bytes = 1;
         assert!(config.validate().is_err());
     }
+
+    #[test]
+    fn distributed_configuration_examples_validate() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+        for file in ["loopback.toml", "tls-client.toml", "service.toml"] {
+            let path = root.join(file);
+            Config::load(Some(&path), std::iter::empty(), Overrides::default()).unwrap();
+        }
+    }
 }

@@ -1,0 +1,26 @@
+[runtime]
+queue_capacity = 32
+shutdown_timeout_ms = 3000
+
+[scanner]
+roots = ["tests/fixtures"]
+allowed_mount_prefixes = []
+
+[pacing]
+bytes_per_second = 1048576
+traffic_limit_bytes = 67108864
+
+[pacing.schedule]
+day_start_hour = 8
+night_start_hour = 20
+utc_offset_minutes = 480
+day_bytes_per_second = 524288
+night_bytes_per_second = 1048576
+
+[state]
+enabled = true
+directory = ".dandelion-state"
+lifetime_limit_bytes = 1073741824
+
+[transport]
+mode = "loopback"

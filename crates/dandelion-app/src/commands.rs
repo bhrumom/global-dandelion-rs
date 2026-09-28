@@ -300,7 +300,11 @@ fn update(command: &crate::cli::UpdateCommand) -> Result<u8> {
         (None, Some(url)) => dandelion_updater::fetch_small(url, 65536)?,
         _ => return Err(Error::Config("choose one manifest source".into())),
     };
-    let signature = dandelion_updater::read_small(&trust.signature, 64)?;
+    let signature = match (&trust.signature, &trust.signature_url) {
+        (Some(path), None) => dandelion_updater::read_small(path, 64)?,
+        (None, Some(url)) => dandelion_updater::fetch_small(url, 64)?,
+        _ => return Err(Error::Config("choose one detached signature source".into())),
+    };
     let key = dandelion_updater::read_small(&trust.public_key, 32)?;
     let target = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
     let verified = dandelion_updater::verify(

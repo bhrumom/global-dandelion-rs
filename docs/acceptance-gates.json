@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "full_replacement_verified": false,
+  "required_gates": [
+    {
+      "id": "current-ci",
+      "requirement": "All automated gates pass on the exact current tested commit; extracted artifacts and real CLI scenarios are verified."
+    },
+    {
+      "id": "physical-hotspot",
+      "requirement": "Actual Linux Wi-Fi AP activation, interruption and restoration with representative adapter/driver; mock tests are insufficient."
+    },
+    {
+      "id": "physical-hotplug",
+      "requirement": "Actual mount removal/replacement/reinsertion during scan, no wrong-device resume, and recovery/service behavior on representative hardware."
+    },
+    {
+      "id": "controlled-cutover",
+      "requirement": "Pinned equivalent whole-program scan/read/transfer workloads on controlled identical hardware; CPU/GiB, sustained throughput, true peak RSS and shutdown distributions. Packet-only shared CI samples are insufficient."
+    },
+    {
+      "id": "production-release-trust",
+      "requirement": "Operator-provisioned trusted signing key, actual signed release origin/artifacts, staged activation and rollback in the deployment environment."
+    }
+  ],
+  "evidence_delivery": "Pass an independently reviewed external evidence manifest to scripts/check_parity.py --require-complete --evidence FILE. Never invent missing evidence or weaken this gate."
+}

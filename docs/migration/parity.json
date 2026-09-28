@@ -13,11 +13,16 @@
         26,
         104
       ],
-      "destination": "future telemetry",
+      "destination": "platform time / authenticated peer control",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Runtime uses monotonic clocks; network clock drift metadata is not implemented.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Passive Unix/uptime metadata and authenticated peer clock comparison; no host mutation or UTC-authority claim.",
+      "evidence": [
+        "crates/dandelion-app/src/commands.rs",
+        "crates/dandelion-transport/src/tls.rs",
+        "scripts/tls_acceptance.py"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "host-clock-mutation",
@@ -34,7 +39,8 @@
       "reason": "No automatic host clock/timezone modification.",
       "evidence": [
         "docs/adr/0001-first-vertical-slice.md"
-      ]
+      ],
+      "verification_scope": "documented-exclusion"
     },
     {
       "id": "disk-partitions",
@@ -46,11 +52,15 @@
         123,
         174
       ],
-      "destination": "platform-linux",
+      "destination": "platform-linux inventory",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Mount inventory and discovery not implemented.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Bounded mountinfo parser with escaped paths and device/mount identity.",
+      "evidence": [
+        "crates/dandelion-platform-linux/src/inventory.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "disk-space",
@@ -69,7 +79,8 @@
       "evidence": [
         "crates/dandelion-platform-linux/src/lib.rs",
         "scripts/disk_guard.py"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "network-interfaces",
@@ -81,11 +92,15 @@
         190,
         566
       ],
-      "destination": "platform-linux",
+      "destination": "platform-linux inventory",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "No automatic interface selection or host network changes.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Passive interface state/MAC/MTU/counters; concrete address selection is delegated to explicit configured peer routing, not discovery.",
+      "evidence": [
+        "crates/dandelion-platform-linux/src/inventory.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "connections",
@@ -97,11 +112,15 @@
         246,
         2941
       ],
-      "destination": "platform-linux",
+      "destination": "platform-linux inventory",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Read-only connection summaries remain pending.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Bounded passive TCP/TCP6 state summary; incomplete observations retain warnings.",
+      "evidence": [
+        "crates/dandelion-platform-linux/src/inventory.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "structured-logging",
@@ -120,7 +139,8 @@
       "evidence": [
         "crates/dandelion-app/src/main.rs",
         "crates/dandelion-app/tests/cli.rs"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "progress-ui",
@@ -132,11 +152,15 @@
         430,
         2433
       ],
-      "destination": "future tui",
+      "destination": "dandelion-tui",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Snapshot-driven TUI not implemented; headless output is available.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Latest-value terminal dashboard, owned observer, non-TTY rejection and terminal restore.",
+      "evidence": [
+        "crates/dandelion-tui/src/lib.rs",
+        "scripts/tui_acceptance.py"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "live-speed-stats",
@@ -152,11 +176,15 @@
         437,
         545
       ],
-      "destination": "future telemetry",
+      "destination": "core telemetry + tui",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Final per-run totals are available; live per-worker/category speed presentation remains pending.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Monotonic sampled accepted/verified rates, idle/reset handling; no legacy mutable worker maps.",
+      "evidence": [
+        "crates/dandelion-core/src/telemetry.rs",
+        "crates/dandelion-tui/src/lib.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "day-night-pacing",
@@ -168,11 +196,16 @@
         571,
         643
       ],
-      "destination": "pacing",
+      "destination": "core schedule + pacing",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Constant rate token bucket exists; wall-clock profile scheduling is not implemented.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Explicit day/night civil-time policy with UTC offset and monotonic token waits, reused across service passes.",
+      "evidence": [
+        "crates/dandelion-core/src/schedule.rs",
+        "crates/dandelion-pacing/src/lib.rs",
+        "crates/dandelion-app/src/execution.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "constant-rate",
@@ -191,7 +224,8 @@
       "evidence": [
         "crates/dandelion-pacing/src/lib.rs",
         "crates/dandelion-app/src/supervisor.rs"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "surface-scan",
@@ -202,11 +236,16 @@
         648,
         758
       ],
-      "destination": "future compatibility scanner",
+      "destination": "scanner + ReadVerifier",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "No automatic whole-drive surface reading.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Explicit finite paced selected-file read verification; no automatic raw-device surface operations.",
+      "evidence": [
+        "crates/dandelion-scanner/src/lib.rs",
+        "crates/dandelion-transport/src/lib.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "metadata-scan",
@@ -217,11 +256,15 @@
         763,
         846
       ],
-      "destination": "scanner",
+      "destination": "scanner metadata mode",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "One-pass selected-root traversal exists; drive-based continuous metadata job remains pending.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Streaming metadata inventory without payload opens; finite bounds and cancellation.",
+      "evidence": [
+        "crates/dandelion-scanner/src/lib.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "hotspot",
@@ -232,11 +275,17 @@
         852,
         1286
       ],
-      "destination": "future hotspot capability",
+      "destination": "hotspot + Linux ProcessRunner",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Privileged hotspot lifecycle and broadcast have not been implemented.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Explicit temporary NetworkManager AP lifecycle, private password input and owned-profile rollback. Physical wireless-driver acceptance is still outstanding.",
+      "evidence": [
+        "crates/dandelion-hotspot/src/lib.rs",
+        "crates/dandelion-platform-linux/src/process.rs",
+        "crates/dandelion-app/tests/cli.rs",
+        "docs/adr/0006-hotspot-capability-and-rollback.md"
+      ],
+      "verification_scope": "physical-hotspot-required"
     },
     {
       "id": "release-version",
@@ -247,11 +296,15 @@
         1296,
         1319
       ],
-      "destination": "future updater",
+      "destination": "dandelion-updater",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Package version exists; update channel selection is pending.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Semantic versions, stable-channel/downgrade/architecture/expiry validation.",
+      "evidence": [
+        "crates/dandelion-updater/src/lib.rs",
+        "scripts/update_acceptance.py"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "updater",
@@ -262,11 +315,16 @@
         1321,
         1587
       ],
-      "destination": "future signed updater",
+      "destination": "signed updater + opt-in systemd timer",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "No self-overwrite, git checkout of running source, or auto restart.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Signed metadata discovery/check and verified local/HTTPS staging; operator-controlled activation replaces blind running-code checkout. Production signing/trust and deployment validation remain open.",
+      "evidence": [
+        "crates/dandelion-updater/src/lib.rs",
+        "scripts/update_acceptance.py",
+        "packaging/systemd/dandelion-update-check.timer"
+      ],
+      "verification_scope": "production-trust-required"
     },
     {
       "id": "rename-effect",
@@ -278,11 +336,16 @@
         1593,
         2992
       ],
-      "destination": "future optional journaled compatibility",
-      "classification": "redesigned",
-      "status": "pending",
-      "reason": "Disabled/absent; must not modify user filenames.",
-      "evidence": []
+      "destination": "platform-linux legacy link capability",
+      "classification": "legacy-adapter",
+      "status": "implemented",
+      "reason": "Pinned source only renames hidden links, not original files. Explicit private-journal link exercise/recovery preserves this distinction and never guesses filenames.",
+      "evidence": [
+        "crates/dandelion-platform-linux/src/legacy_links.rs",
+        "crates/dandelion-app/tests/cli.rs",
+        "docs/adr/0008-explicit-legacy-adapters.md"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "loopback-send",
@@ -301,7 +364,8 @@
         "crates/dandelion-transport/src/lib.rs",
         "crates/dandelion-app/src/supervisor.rs",
         "scripts/acceptance.py"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "loopback-receive",
@@ -319,7 +383,8 @@
       "evidence": [
         "crates/dandelion-transport/src/lib.rs",
         "crates/dandelion-app/tests/cli.rs"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "private-vps",
@@ -330,11 +395,16 @@
         1918,
         2060
       ],
-      "destination": "future authorized transport",
+      "destination": "mutual TLS transport",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Explicit target policy and private transport come after green first slice.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Exact authorized private/VPS peers, CA/name/client validation, metered handshake/data and verified receipts.",
+      "evidence": [
+        "crates/dandelion-transport/src/tls.rs",
+        "crates/dandelion-core/src/targets.rs",
+        "scripts/tls_acceptance.py"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "lan",
@@ -345,11 +415,16 @@
         2063,
         2121
       ],
-      "destination": "future authorized LAN transport",
+      "destination": "mutual TLS transport",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "No implicit transmission to discovered devices.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Authorized unicast peers replace automatic unsolicited LAN broadcasts; no discovery-to-send escalation.",
+      "evidence": [
+        "crates/dandelion-transport/src/tls.rs",
+        "crates/dandelion-core/src/targets.rs",
+        "scripts/tls_acceptance.py"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "startup-drive-scan",
@@ -360,11 +435,16 @@
         2435,
         2465
       ],
-      "destination": "future drive observer",
+      "destination": "explicit mount policy + service",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Only explicitly configured source roots are read.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Configured mount-prefix inventory enrolls matching data volumes; no implicit whole-host source discovery.",
+      "evidence": [
+        "crates/dandelion-platform-linux/src/inventory.rs",
+        "crates/dandelion-app/src/execution.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "physical-hotplug-required"
     },
     {
       "id": "external-drive-monitor",
@@ -375,11 +455,16 @@
         2471,
         2639
       ],
-      "destination": "future drive observer",
+      "destination": "mount diff observer + service",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Mount/unmount lifecycle not implemented.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Bounded mount identity differences, explicit watch output and between-pass resampling; mid-read removal fails closed. Continuous physical unplug recovery remains a hardware/cutover gate.",
+      "evidence": [
+        "crates/dandelion-platform-linux/src/inventory.rs",
+        "crates/dandelion-app/src/execution.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "physical-hotplug-required"
     },
     {
       "id": "source-scan",
@@ -398,7 +483,8 @@
         "crates/dandelion-scanner/src/lib.rs",
         "crates/dandelion-platform-linux/src/lib.rs",
         "crates/dandelion-app/src/supervisor.rs"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "chunk-framing",
@@ -416,7 +502,8 @@
       "evidence": [
         "crates/dandelion-packet/src/lib.rs",
         "docs/protocol-v2.md"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "wan-workers",
@@ -427,11 +514,16 @@
         2717,
         2793
       ],
-      "destination": "future authorized transport",
+      "destination": "mutual TLS transport",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "WAN unsupported until explicit authorization and policy tests.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "WAN disabled by default; explicit authorization plus WAN enable and exact allowlist are mandatory.",
+      "evidence": [
+        "crates/dandelion-transport/src/tls.rs",
+        "crates/dandelion-core/src/targets.rs",
+        "scripts/tls_acceptance.py"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "worker-explosion",
@@ -450,7 +542,8 @@
         "crates/dandelion-app/src/supervisor.rs",
         "crates/dandelion-app/src/main.rs",
         "docs/adr/0001-first-vertical-slice.md"
-      ]
+      ],
+      "verification_scope": "documented-exclusion"
     },
     {
       "id": "shutdown",
@@ -469,7 +562,8 @@
         "crates/dandelion-app/src/supervisor.rs",
         "crates/dandelion-app/src/main.rs",
         "scripts/acceptance.py"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "state",
@@ -481,11 +575,16 @@
         2842,
         2869
       ],
-      "destination": "future state",
+      "destination": "dandelion-state",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Persistent versioned state/crash-safe writes and legacy importer not implemented.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Single-writer durable checksummed ledger, conservative leases, actual legacy schema import and scoped file-level resume. No automatic monthly debt reset or byte-level exactly-once claim.",
+      "evidence": [
+        "crates/dandelion-state/src/lib.rs",
+        "crates/dandelion-app/tests/cli.rs",
+        "docs/adr/0007-bounded-file-resume.md"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "country-metadata",
@@ -496,11 +595,15 @@
         2871,
         2893
       ],
-      "destination": "future optional metadata importer",
+      "destination": "dandelion-compat country",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "No country-based destination generation or metadata importer.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Bounded header-based country CSV lookup; metadata cannot authorize/generate targets.",
+      "evidence": [
+        "crates/dandelion-compat/src/country.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "random-public-targets",
@@ -520,7 +623,8 @@
         "docs/adr/0001-first-vertical-slice.md",
         "crates/dandelion-config/src/lib.rs",
         "crates/dandelion-transport/src/lib.rs"
-      ]
+      ],
+      "verification_scope": "documented-exclusion"
     },
     {
       "id": "target-health",
@@ -531,11 +635,17 @@
         2908,
         2914
       ],
-      "destination": "future transport health",
+      "destination": "transport peer receipts / socket meter",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "No arbitrary connectivity probes; target-specific health comes with authorized external transport.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Per-peer authenticated verification and actual ciphertext counters; failures retain typed errors and log available health instead of completed status.",
+      "evidence": [
+        "crates/dandelion-transport/src/tls.rs",
+        "crates/dandelion-transport/src/metered.rs",
+        "crates/dandelion-app/src/supervisor.rs",
+        "scripts/tls_acceptance.py"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "neighbour-discovery",
@@ -546,11 +656,15 @@
         2916,
         2932
       ],
-      "destination": "future read-only observer",
+      "destination": "read-only platform inventory",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Discovery must not automatically authorize traffic.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Bounded passive IPv4 ARP observation, without active scanning or target enrollment.",
+      "evidence": [
+        "crates/dandelion-platform-linux/src/inventory.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "target-policy",
@@ -561,11 +675,16 @@
         2943,
         2955
       ],
-      "destination": "future config/policy",
+      "destination": "core exact-address capability",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Only owned loopback sockets are possible; external allowlist is not yet implemented.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "Constructible validated authorized-peer tokens, private/WAN classification, negative policy tests and no hostname destination expansion.",
+      "evidence": [
+        "crates/dandelion-core/src/targets.rs",
+        "crates/dandelion-transport/src/tls.rs",
+        "scripts/tls_acceptance.py"
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "batch-send",
@@ -576,11 +695,16 @@
         2957,
         2974
       ],
-      "destination": "future optimized transport",
+      "destination": "bounded authenticated peer fanout",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Stop-and-verify correctness adapter exists; no batching optimization claimed.",
-      "evidence": []
+      "status": "implemented",
+      "reason": "One encoded packet is reused across up to eight peers with acknowledgements, budgets and timeouts. Kernel sendmmsg and peak WAN throughput optimizations are not claimed.",
+      "evidence": [
+        "crates/dandelion-transport/src/tls.rs",
+        "crates/dandelion-app/src/execution.rs",
+        "scripts/tls_acceptance.py"
+      ],
+      "verification_scope": "controlled-cutover-required"
     },
     {
       "id": "wire-budget",
@@ -598,7 +722,8 @@
       "evidence": [
         "crates/dandelion-core/src/lib.rs",
         "crates/dandelion-app/src/supervisor.rs"
-      ]
+      ],
+      "verification_scope": "current-ci"
     },
     {
       "id": "orchestration",
@@ -617,7 +742,9 @@
         "crates/dandelion-app/src/main.rs",
         "crates/dandelion-app/src/supervisor.rs",
         "crates/dandelion-app/tests/cli.rs"
-      ]
+      ],
+      "verification_scope": "current-ci"
     }
-  ]
+  ],
+  "acceptance_gate_manifest": "docs/acceptance-gates.json"
 }

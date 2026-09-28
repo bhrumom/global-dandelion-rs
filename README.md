@@ -1,30 +1,163 @@
 # Global Dandelion RS
 
-[Chinese documentation / README.zh-CN](README.zh-CN.md)
+[Chinese documentation](README.zh-CN.md)
 
-A Linux-first, unprivileged Rust CLI rearchitecture of `global_dandelion.py`.
-The executable is **`dandelion`**, not a Python wrapper.
+A native Linux Rust CLI replacing the Python program through explicit, bounded,
+testable components. **Spec revision 2 replaces the original first-slice Spec.**
+This branch now contains real implementations across transfer, state/resume,
+platform discovery, pacing, TUI, hotspot, signed updates and legacy compatibility.
+Full hardware and controlled whole-program cutover acceptance remains separate from
+code completion and automated CI; see [acceptance gates](docs/acceptance-gates.json).
 
-**Current scope: the first working vertical slice, not full Python feature parity.**
-It scans explicitly selected directories once, frames chunks, applies bounded
-backpressure and pacing, sends real UDP on loopback, and verifies received bytes.
-WAN/LAN/VPS, automatic drive discovery, hotspot, TUI, persistent resume and
-self-update are not implemented in this slice. Unsupported modes fail validation.
-No speedup over Python is claimed without the controlled baseline comparison.
+## Native command line
 
-## Quick start
+```sh
+dandelion --help
+dandelion self-test --json
+dandelion config init
+dandelion --config examples/service.toml config check
+dandelion run --source /srv/data --dry-run --json
+dandelion run --source /srv/data --repeat 3 --interval-ms 1000 --json
+dandelion --config examples/service.toml run --resume --json
+dandelion run --source /srv/data --tui
+dandelion scan metadata --source /srv/data --json
+dandelion scan read --source /srv/data --json
+dandelion platform inspect
+dandelion platform watch --samples 10 --interval-ms 1000
+dandelion platform time
+dandelion state inspect --directory .dandelion-state
+dandelion state import --directory .dandelion-state --file traffic_state.json
+dandelion completions bash
+```
 
-Requirements: Linux kernel 5.6+ (`openat2`), an x86_64 or aarch64 host, and Rust
-1.98.1 when building from source. No root privileges are required.
-The current GNU/Linux CI binaries are built/tested on Ubuntu 24.04 and require
-a compatible glibc userspace; they are not static musl binaries or macOS builds.
+`run` defaults to one pass and local UDP verification. `--watch` is explicit and
+still constrained by session/lifetime budgets; repeat passes share the same token
+bucket, so repeating a scan cannot manufacture new burst allowance. `--dry-run`
+validates configuration without sockets/source scanning. `scan metadata` never
+reads payload; `scan read` runs paced source verification without sockets.
 
-Prefer the binary artifacts from a **successful** `Rust CLI Quality` Actions run.
-Each includes a platform-specific `.tar.gz` and its `.sha256` file.
-Verify the outer archive first, extract it, then verify `SHA256SUMS` inside.
-The tar archive preserves the executable permission of `dandelion`; it also
-contains `Cargo.lock`, `BUILD-INFO.txt` and the acceptance result.
-For example, after downloading and unpacking the GitHub artifact ZIP:
+## Architecture: 13 implemented workspace packages
+
+```text
+CLI -> configuration -> supervised service
+                   -> source/checkpoint/process/storage capability ports
+source -> blocking reader -> bounded queue -> versioned packet -> limiter/budget
+                                                       -> transport -> receipt
+receipts -> checkpoints / immutable telemetry -> latest-value TUI
+```
+
+| Package | Production responsibility |
+|---|---|
+| app | commands, composition, service lifecycle, signals, output |
+| core | domain values, typed errors, capability ports, target and rate policies |
+| config | validated defaults/TOML/environment/CLI precedence |
+| scanner | bounded read-only traversal, metadata/read modes and checkpoint skip |
+| packet | documented v2 framing, checked decode, BLAKE3 checksum |
+| pacing | monotonic integer token bucket and explicit day/night schedule |
+| transport | local UDP, mutual TLS peers, receiver, actual socket-byte metering |
+| platform-linux | rooted file access, mount/interface observation, privileged adapters |
+| state | exclusive writer, atomic durable ledger, conservative leases and file resume |
+| tui | independent latest-value terminal observer with restoration guard |
+| updater | Ed25519 trust verification, semantic versions, bounded artifact staging |
+| hotspot | explicit NetworkManager lifecycle and journaled owned-profile rollback |
+| compat | isolated legacy MD5 framing and country CSV metadata |
+
+Core has no Tokio, Linux, CLI or socket-implementation dependency. App injects
+SourceAccess/SourceRoot/SourceFile, Checkpoints, ProcessRunner and WriteGuard.
+Scanner never imports concrete Linux/state adapters. No empty feature packages,
+mutable global application maps, unbounded production queues or application unsafe
+Rust. CI checks dependency direction; it is not a substitute for runtime tests.
+
+## Authenticated LAN/private/VPS/WAN peers
+
+Local UDP remains the default. External transfers use **mutual TLS 1.3**, trusted
+CA/client/server identities, explicit numeric targets and verified server names.
+TLS names do not perform destination DNS expansion. A public peer requires its
+explicit authorization, WAN enable and exact address allowlist. Discovery never
+authorizes a network peer. See [TLS example](examples/tls-client.toml).
+
+```sh
+dandelion receive --bind 127.0.0.1:20000 --ca-file credentials/ca.pem \
+  --certificate-file credentials/server.pem --private-key-file credentials/server.key --json
+dandelion --config examples/tls-client.toml run --json
+dandelion --config examples/tls-client.toml platform time --peer
+```
+
+Private keys must be regular private-permission files, never inline arguments.
+Client credential files are excluded from scanning. A non-loopback receiver also
+requires explicit `--allow-remote` and `--allowed-client` values. Do not expose it
+with test keys or an unreviewed trust policy. Receipts mean authenticated in-memory
+verification, **not durable remote file storage**. Frames are not silently retried
+after an ambiguous receipt. Connection retries are bounded before payload sending.
+
+The meter is **below TLS**: handshake, encrypted records, acknowledgements and
+control messages count. Counters measure bytes accepted by the socket API, not
+IP/TCP headers, kernel retransmissions or physical-link traffic. Per-peer verified
+packets/payload and actual ciphertext counters are included in final snapshots.
+
+## State, resume and source safety
+
+State is optional and off by default. Enabling it requires a private directory;
+a single writer lock prevents competing jobs. Commits sync a temporary file,
+atomically replace state, and sync the directory. Before network startup, a
+whole-run budget lease is durably charged. Clean settlement returns proven unused
+bytes; failures/crashes conservatively retain the lease. Corrupt/future state never
+silently resets traffic debt. This is a lifetime budget, not an automatic monthly reset.
+
+`--resume` requires enabled state and one pass. It stores up to 4,096 acknowledged
+file identities, scoped to target policy and TLS trust/client certificate. Unchanged
+acknowledged files are skipped; changed/incomplete files are read again. Checkpoints
+commit at controlled settlement; SIGKILL/host crash can replay work since the last
+commit. **This is file-level, at-least-once resume, not byte-level or exactly-once storage.**
+
+Source opens use Linux openat2 beneath selected roots, with no symlink/magic-link
+escape or mount crossing. File-handle metadata detects common changes, not arbitrary
+same-user adversaries or filesystem snapshots. The normal transfer/read modes never
+rename or modify source contents. Explicit compatibility link exercises necessarily
+change inode metadata and require a quiescent trusted source directory.
+
+## Optional operational capabilities
+
+`platform inspect/watch` passively observes mounts, interface counters, TCP and
+IPv4 ARP. Automatic mount enrollment is off unless explicit non-root mount prefixes
+are configured. Mid-read unmounts fail closed; do not assume arbitrary hotplug fault
+recovery or driver compatibility without real hardware evidence.
+
+`--tui` renders snapshots on stderr without blocking the data path, including live
+monotonic rates. Non-TTY use remains headless. Real PTY acceptance tests verify
+alternate-screen restoration under signals. `platform time --peer` estimates an
+authenticated peer's clock offset; it never changes host time or asserts UTC authority.
+
+`hotspot plan` is read-only; `apply/stop` require `--confirm`, existing system
+capability and a private journal. Only an owned temporary NetworkManager profile
+may be changed/removed; rollback respects later operator changes. No hidden sudo,
+password command arguments, autoconnect or radio-regulation overrides. Real wireless
+hardware acceptance remains outstanding. See [operations](docs/operations.md).
+
+`update check/stage` verifies an independently trusted Ed25519 public key, manifest
+signature, version, architecture, expiry, SHA-256 and exact artifact size. Explicit
+HTTPS origins and no redirects are enforced. Staging never executes/replaces the
+active binary. [systemd templates](packaging/systemd/) provide optional service and
+periodic signed release checking; nothing is installed/enabled automatically.
+Production key provisioning and activation/rollback require operator validation.
+
+`compat` contains bounded country lookup, legacy packet inspection, and opt-in
+journaled link exercise/recovery. No random-IP generator, filename-guess deletion
+or public traffic spray is ported. MD5 is legacy interoperability, not authentication.
+
+## Build, test, artifacts and limitations
+
+Build/test/package on disposable GitHub Actions runners, not storage-constrained
+persistent devices. Pin Rust 1.98.1, edition 2024 and Cargo.lock. Linux x86_64/ARM64
+artifacts are built on Ubuntu 24.04 GNU/glibc, require compatible userspace and
+Linux 5.6+ safe-open support, and are not macOS/static-musl packages.
+
+Every mandatory automated gate runs formatting, Clippy, unit/property/CLI tests,
+real UDP/mTLS negative tests, state/resume, PTY restoration, signed update staging,
+architecture/parity checks, RustSec and licensing policy. Archives preserve executable
+mode, checksums, build metadata, original third-party license notices, acceptance
+JSON and raw benchmark evidence. Inspect the **exact revision and successful run**.
+These are CI artifacts, not a production signed release.
 
 ```sh
 sha256sum --check dandelion-x86_64-unknown-linux-gnu.tar.gz.sha256
@@ -34,108 +167,21 @@ cd dandelion-bin
 sha256sum --check SHA256SUMS
 ./dandelion self-test --json
 ```
-Artifacts are CI builds, not a signed public release or a guarantee of bit-for-bit reproducibility.
 
-```sh
-dandelion --help
-dandelion doctor
-dandelion self-test --json
-dandelion config init
-dandelion --config examples/loopback.toml config check
-dandelion --config examples/loopback.toml run --json
-dandelion run --source /path/to/your/data --dry-run --json
-dandelion run --source /path/to/your/data --traffic-limit-bytes 67108864 --json
-dandelion completions bash
-```
+Before all writes/downloads/builds preserve max(1 GiB, 5% filesystem capacity).
+Queued memory estimates are not total RSS. Source-read, traffic, receiver-session,
+metadata, checkpoint and update sizes all have independent explicit limits.
+Shared-runner packet benchmarks compare the exact reviewed pure Python framing
+expression to Rust; they do not prove whole-program or WAN throughput improvement.
+Full physical hotspot/hotplug, production release trust and representative controlled
+cutover measurements remain separate acceptance gates, never implied by a green build.
 
-`config init` prints to stdout; it does not overwrite a file. Inspect available
-storage before redirecting output. `run` is a finite one-pass job, not an infinite
-background scanner. `Ctrl+C` and `SIGTERM` cancel the job and return exit code 130.
-Files are **read only** and are not renamed, rewritten, or persisted by the receiver.
-The loopback receiver proves packet receipt/integrity, not remote file storage.
+## Source of truth
 
-### Build and verify
-
-Use GitHub Actions for all compilation, tests, security auditing and release builds.
-Do not run heavy builds on persistent devices with insufficient disk reserves.
-For an explicitly provisioned disposable development machine:
-
-```sh
-python3 scripts/disk_guard.py --planned-bytes 6442450944
-cargo build --locked --release -p dandelion-app
-cargo fmt --all -- --check
-cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-cargo test --locked --workspace --all-features
-python3 scripts/acceptance.py --binary target/release/dandelion
-```
-
-## Architecture
-
-```text
-CLI / configuration
-       |
-   Supervisor -- cancellation, single-owner budget, typed outcomes
-       |
-   blocking scanner -> bounded mpsc -> packet v2 -> token bucket
-                                                  |
-                                        transport port (trait)
-                                                  |
-                                      connected UDP loopback pair
-                                                  |
-                                       decode + exact-byte verifier
-```
-
-| Package | Responsibility |
-| --- | --- |
-| `dandelion-app` | Commands, composition, task supervision, signals, logging |
-| `dandelion-core` | Domain values, typed failures, immutable snapshots, budget |
-| `dandelion-config` | Defaults/TOML/environment/CLI precedence and validation |
-| `dandelion-scanner` | One bounded, cancellable blocking file pipeline |
-| `dandelion-packet` | Versioned framing, zero-copy decode, BLAKE3 checksum |
-| `dandelion-pacing` | Integer monotonic-clock token bucket |
-| `dandelion-transport` | Transport interface and real local UDP verifier |
-| `dandelion-platform-linux` | Kernel-bounded source opens and disk reserve checks |
-
-The core has no Tokio, CLI, Linux or socket dependency. Filesystem access is
-inverted through `SourceAccess -> SourceRoot -> SourceFile` capability ports;
-the application injects the Linux implementation. The scanner does not depend
-on the concrete platform package in production. Only the Linux adapter knows
-`openat2`, `statvfs` and device/inode timestamp layouts. No empty placeholder
-packages are created for unimplemented domains.
-
-## Safety and limits
-
-Defaults: 32 queued chunks, 1,152-byte payloads, 1 MiB/s wire-rate target,
-1,232-byte burst, 64 MiB wire budget, 256 MiB source-read budget, depth 64,
-one million files, and a 3-second cooperative shutdown deadline.
-The memory setting bounds queued packet payload estimates, **not total RSS**;
-Tokio, traversal metadata, file descriptors and OS socket buffers are separate.
-
-Only `127.0.0.1` sockets are opened. No public-IP generation, LAN discovery,
-background updating, system clock mutation, shell execution or privileged network
-configuration is performed. BLAKE3 is an unkeyed checksum, not authentication or encryption.
-Sources should be trusted data directories. Hidden names and common generated
-folders are excluded by default; symbolic links and mount crossings are rejected.
-Hard links, overlapping bind mounts and an attacker who controls source contents
-are not a confidentiality boundary. Runtime metadata checks detect ordinary
-mutations but do not provide a filesystem snapshot.
-
-The scanner holds at most `max_depth + 1` directory handles to avoid WalkDir's
-collect-to-close behavior. It neither sorts nor retains the complete file tree.
-A stalled consumer backpressures the producer. On cancellation/error, the
-receiver is dropped before joining the producer. A kernel-blocked filesystem
-syscall cannot be forcibly interrupted by aborting a Rust task: timeout is an
-explicit error, and the CLI does not wait indefinitely while dropping its runtime.
-
-## Documentation
-
-- [Authoritative architecture Spec](docs/specs/global-dandelion-rust-architecture.md)
-- [First-slice decisions and boundaries](docs/adr/0001-first-vertical-slice.md)
-- [Packet v2 byte layout](docs/protocol-v2.md)
-- [Configuration and operations](docs/operations.md)
-- [Python migration ledger](docs/migration/python-parity-ledger.md)
-- [Benchmark methodology](docs/benchmarks.md)
-
-Pinned source: `bhrum/global@aa7f3720c42856f0e1d18742f78fba156227ee79`,
-`global_dandelion.py` blob `54bf6226eb80d1ef6c4f6087fb02579141ab134f` (3,179 lines).
-No source license is inferred from repository access; workspace publishing is disabled.
+[Spec v2](docs/specs/global-dandelion-rust-architecture.md) replaces the archived v1.
+[Migration ledger](docs/migration/python-parity-ledger.md), [ADRs](docs/adr/),
+[development record](docs/development/2026-09-28-complete-migration.md),
+[operations](docs/operations.md), [benchmark methodology](docs/benchmarks.md).
+Python source pinned to `bhrum/global@aa7f3720c42856f0e1d18742f78fba156227ee79`,
+blob `54bf6226eb80d1ef6c4f6087fb02579141ab134f`. Repository access does not assign a
+new source license; workspace publishing remains disabled.
