@@ -45,6 +45,7 @@ jobs:
           python3 scripts/check_architecture.py
           python3 scripts/check_parity.py
           python3 scripts/evidence_contract_selftest.py
+          python3 -m py_compile scripts/controlled_cutover.py
       - name: Clippy
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Unit, property, integration and CLI tests
