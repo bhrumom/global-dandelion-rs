@@ -24,11 +24,13 @@ The Spec is authoritative for architecture, migration policy, concurrency, targe
 
 ## Development sequence
 
-Follow the migration phases in the Spec. The first implementation slice is:
-
-`config -> supervisor -> scanner fixture -> packet encoder -> loopback transport -> local verifier`
-
-Do not expand into later feature domains until that slice is green in CI.
+Read the replacement revision 2 Spec. The first slice is already green at run
+36421256894; do not restart the project or stop at a loopback skeleton. Implement
+all required migration domains with production wiring and exact-revision evidence.
+A foundation CI pass is not full cutover. Keep pending/hardware/performance gates
+visible. Do not weaken required gates, invent no-op commands, or relabel unfinished
+capabilities as removed. Development records go in docs/development/; do not append
+conflicting architectural policies to the end of the Spec.
 
 ## Disk and execution safety (mandatory)
 

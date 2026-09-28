@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+serde.workspace = true
 dandelion-core.workspace = true
 walkdir.workspace = true
 tokio.workspace = true

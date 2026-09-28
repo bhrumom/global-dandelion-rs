@@ -13,6 +13,8 @@ name = "dandelion"
 path = "src/main.rs"
 
 [dependencies]
+dandelion-tui.workspace = true
+dandelion-state.workspace = true
 dandelion-core.workspace = true
 dandelion-config.workspace = true
 dandelion-scanner.workspace = true

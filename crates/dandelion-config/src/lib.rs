@@ -13,6 +13,7 @@ pub struct Config {
     pub scanner: Scanner,
     pub pacing: Pacing,
     pub transport: Transport,
+    pub state: State,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -42,6 +43,7 @@ pub struct Scanner {
     pub max_depth: usize,
     pub max_files: u64,
     pub max_read_bytes: u64,
+    pub allowed_mount_prefixes: Vec<PathBuf>,
 }
 impl Default for Scanner {
     fn default() -> Self {
@@ -59,6 +61,7 @@ impl Default for Scanner {
             max_depth: 64,
             max_files: 1_000_000,
             max_read_bytes: 256 * 1024 * 1024,
+            allowed_mount_prefixes: Vec::new(),
         }
     }
 }
@@ -69,6 +72,7 @@ pub struct Pacing {
     pub bytes_per_second: u64,
     pub burst_bytes: u64,
     pub traffic_limit_bytes: u64,
+    pub schedule: Option<dandelion_core::schedule::DayNight>,
 }
 impl Default for Pacing {
     fn default() -> Self {
@@ -76,6 +80,7 @@ impl Default for Pacing {
             bytes_per_second: 1024 * 1024,
             burst_bytes: MAX_DATAGRAM_BYTES as u64,
             traffic_limit_bytes: 64 * 1024 * 1024,
+            schedule: None,
         }
     }
 }
@@ -92,6 +97,23 @@ pub enum Mode {
     Loopback,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct State {
+    pub enabled: bool,
+    pub directory: PathBuf,
+    pub lifetime_limit_bytes: u64,
+}
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            directory: PathBuf::from(".dandelion-state"),
+            lifetime_limit_bytes: 180 * 1024 * 1024 * 1024,
+        }
+    }
+}
+
 /// Constructible only through validation. Runtime code cannot mutate the config.
 #[derive(Clone, Debug)]
 pub struct ValidatedConfig(Config);
@@ -100,7 +122,7 @@ impl ValidatedConfig {
         &self.0
     }
     pub fn require_sources(&self) -> Result<()> {
-        if self.0.scanner.roots.is_empty() {
+        if self.0.scanner.roots.is_empty() && self.0.scanner.allowed_mount_prefixes.is_empty() {
             return Err(Error::Config(
                 "set scanner.roots or pass --source DIR".into(),
             ));
@@ -174,6 +196,28 @@ impl Config {
                 "traffic_limit_bytes must be positive; unlimited sending is not supported",
             ));
         }
+        if self.state.enabled
+            && (self.state.directory.as_os_str().is_empty() || self.state.lifetime_limit_bytes == 0)
+        {
+            return Err(fail(
+                "enabled state needs a directory and positive lifetime limit",
+            ));
+        }
+        if let Some(schedule) = &self.pacing.schedule {
+            schedule.validate()?;
+        }
+        if self.scanner.allowed_mount_prefixes.len() > 64
+            || self.scanner.allowed_mount_prefixes.iter().any(|p| {
+                !p.is_absolute()
+                    || p.parent().is_none()
+                    || p.components()
+                        .any(|c| matches!(c, std::path::Component::ParentDir))
+            })
+        {
+            return Err(fail(
+                "allowed_mount_prefixes must be absolute non-root paths without '..' (max 64)",
+            ));
+        }
         Ok(ValidatedConfig(self))
     }
 
@@ -220,9 +264,6 @@ impl Config {
                 .ok_or_else(|| {
                     Error::Config(format!("unknown environment section {}", parts[0]))
                 })?;
-            if !section.contains_key(&parts[1]) {
-                return Err(Error::Config(format!("unknown environment setting {key}")));
-            }
             section.insert(parts[1].clone(), parsed["value"].clone());
         }
         let mut config: Self = value

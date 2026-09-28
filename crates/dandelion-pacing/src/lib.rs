@@ -24,6 +24,46 @@ impl TokenBucket {
             updated: Instant::now(),
         })
     }
+    pub fn set_rate(&mut self, rate: u64) -> Result<()> {
+        if rate == 0 {
+            return Err(Error::Config("rate must be positive".into()));
+        }
+        let now = Instant::now();
+        self.credits = self
+            .credits
+            .saturating_add(
+                now.duration_since(self.updated)
+                    .as_nanos()
+                    .saturating_mul(u128::from(self.rate)),
+            )
+            .min(self.capacity);
+        self.updated = now;
+        self.rate = rate;
+        Ok(())
+    }
+    /// Civil clock is checked at most once per second while waiting; the actual
+    /// token wait and cancellation always use the monotonic Tokio clock.
+    pub async fn acquire_scheduled(
+        &mut self,
+        bytes: u64,
+        cancel: &CancellationToken,
+        schedule: Option<&dandelion_core::schedule::DayNight>,
+    ) -> Result<()> {
+        let Some(schedule) = schedule else {
+            return self.acquire(bytes, cancel).await;
+        };
+        loop {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| Error::Task(e.to_string()))?
+                .as_secs();
+            self.set_rate(schedule.rate_at(now.min(i64::MAX as u64) as i64))?;
+            tokio::select! {biased;
+                result=self.acquire(bytes,cancel)=>return result,
+                _=tokio::time::sleep(Duration::from_secs(1))=>{}
+            }
+        }
+    }
     pub async fn acquire(&mut self, bytes: u64, cancel: &CancellationToken) -> Result<()> {
         let need = u128::from(bytes) * SCALE;
         if need > self.capacity {

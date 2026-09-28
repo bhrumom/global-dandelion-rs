@@ -154,3 +154,5 @@ mod tests {
         assert!(root.open_regular(Path::new(".")).is_err());
     }
 }
+
+pub mod inventory;

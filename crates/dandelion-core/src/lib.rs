@@ -1,7 +1,8 @@
 //! Platform-independent transfer values and failure semantics.
 pub mod filesystem;
+pub mod schedule;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{io, path::PathBuf};
 use thiserror::Error;
 
@@ -17,6 +18,10 @@ pub enum Error {
     Config(String),
     #[error("I/O failure: {0}")]
     Io(#[from] io::Error),
+    #[error("persistent state: {0}")]
+    State(String),
+    #[error("platform observation: {0}")]
+    Platform(String),
     #[error("invalid packet: {0}")]
     Protocol(&'static str),
     #[error("operation cancelled")]
@@ -59,7 +64,7 @@ pub struct Chunk {
     pub payload: Vec<u8>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RunStatus {
     #[default]
@@ -68,7 +73,7 @@ pub enum RunStatus {
     BudgetExhausted,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Snapshot {
     pub schema_version: u32,
     pub status: RunStatus,

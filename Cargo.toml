@@ -10,6 +10,8 @@ publish = false
 repository = "https://github.com/bhrumom/global-dandelion-rs"
 
 [workspace.dependencies]
+dandelion-tui = { path = "crates/dandelion-tui", version = "=0.1.0" }
+dandelion-state = { path = "crates/dandelion-state", version = "=0.1.0" }
 dandelion-core = { path = "crates/dandelion-core", version = "=0.1.0" }
 dandelion-config = { path = "crates/dandelion-config", version = "=0.1.0" }
 dandelion-packet = { path = "crates/dandelion-packet", version = "=0.1.0" }

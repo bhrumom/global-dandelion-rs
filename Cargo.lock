@@ -320,7 +320,9 @@ dependencies = [
  "dandelion-packet",
  "dandelion-platform-linux",
  "dandelion-scanner",
+ "dandelion-state",
  "dandelion-transport",
+ "dandelion-tui",
  "getrandom 0.3.4",
  "serde",
  "serde_json",
@@ -385,10 +387,22 @@ version = "0.1.0"
 dependencies = [
  "dandelion-core",
  "dandelion-platform-linux",
+ "serde",
  "tempfile",
  "tokio",
  "tokio-util",
  "walkdir",
+]
+
+[[package]]
+name = "dandelion-state"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "dandelion-core",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -397,6 +411,15 @@ version = "0.1.0"
 dependencies = [
  "dandelion-core",
  "dandelion-packet",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "dandelion-tui"
+version = "0.1.0"
+dependencies = [
+ "dandelion-core",
  "tokio",
  "tokio-util",
 ]

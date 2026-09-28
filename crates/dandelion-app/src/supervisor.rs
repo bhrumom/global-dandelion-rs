@@ -11,11 +11,19 @@ use tokio_util::sync::CancellationToken;
 
 pub struct Supervisor {
     config: ValidatedConfig,
+    observer: Option<tokio::sync::watch::Sender<Snapshot>>,
 }
 impl Supervisor {
     pub fn new(config: ValidatedConfig) -> Result<Self> {
         config.require_sources()?;
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            observer: None,
+        })
+    }
+    pub fn with_observer(mut self, observer: tokio::sync::watch::Sender<Snapshot>) -> Self {
+        self.observer = Some(observer);
+        self
     }
     pub async fn run(self, cancel: CancellationToken) -> Result<Snapshot> {
         let transport = tokio::select! { biased;
@@ -108,9 +116,11 @@ impl Supervisor {
                 chunk = rx.recv() => match chunk { Some(chunk) => chunk, None => break },
             };
             dandelion_packet::encode(&chunk, &mut encoded)?;
-            budget.reserve(encoded.len() as u64)?;
-            rate.acquire(encoded.len() as u64, cancel).await?;
-            snapshot.attempted_wire_bytes += encoded.len() as u64;
+            let wire_cost = transport.wire_cost(&encoded);
+            budget.reserve(wire_cost)?;
+            rate.acquire_scheduled(encoded.len() as u64, cancel, cfg.pacing.schedule.as_ref())
+                .await?;
+            snapshot.attempted_wire_bytes += wire_cost;
             let receipt = tokio::select! { biased;
                 _ = cancel.cancelled() => return Err(Error::Cancelled),
                 result = transport.transmit(&encoded, cancel) => result?,
@@ -118,6 +128,9 @@ impl Supervisor {
             snapshot.accepted_wire_bytes += receipt.accepted_wire_bytes;
             snapshot.verified_payload_bytes += receipt.verified_payload_bytes;
             snapshot.chunks_sent += 1;
+            if let Some(observer) = &self.observer {
+                observer.send_replace(snapshot.clone());
+            }
             if chunk.last {
                 snapshot.files_completed += 1;
             }

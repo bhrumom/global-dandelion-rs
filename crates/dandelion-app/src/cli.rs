@@ -34,6 +34,26 @@ pub enum LogFormat {
 pub enum Command {
     /// Read selected directories once and verify every datagram locally.
     Run(Run),
+    /// Read-only Linux inventory or bounded mount-change observations.
+    Platform {
+        #[command(subcommand)]
+        command: PlatformCommand,
+    },
+    /// Inspect durable state or import the original traffic_state.json.
+    State {
+        #[command(subcommand)]
+        command: StateCommand,
+    },
+    /// Read-only metadata inventory or paced surface reading (no sockets).
+    Scan {
+        #[command(subcommand)]
+        command: ScanCommand,
+    },
+    /// Inspect the last persisted runtime snapshot, without changing state.
+    Status {
+        #[arg(long)]
+        directory: PathBuf,
+    },
     /// Print defaults or validate effective configuration without sending traffic.
     Config {
         #[command(subcommand)]
@@ -68,6 +88,17 @@ pub struct Run {
         help = "Show validated configuration; do not scan files or open sockets"
     )]
     pub dry_run: bool,
+    /// Run a finite number of passes, sharing one traffic budget.
+    #[arg(long, default_value_t = 1)]
+    pub repeat: u32,
+    /// Continue until cancelled or the session traffic budget is exhausted.
+    #[arg(long, conflicts_with = "repeat")]
+    pub watch: bool,
+    #[arg(long, default_value_t = 1000)]
+    pub interval_ms: u64,
+    /// Render a latest-value terminal dashboard on stderr.
+    #[arg(long)]
+    pub tui: bool,
 }
 impl Run {
     pub fn overrides(&self) -> Overrides {
@@ -79,4 +110,42 @@ impl Run {
             traffic_limit_bytes: self.traffic_limit_bytes,
         }
     }
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PlatformCommand {
+    Inspect,
+    Mounts,
+    Watch {
+        #[arg(long, default_value_t = 10)]
+        samples: u32,
+        #[arg(long, default_value_t = 1000)]
+        interval_ms: u64,
+    },
+}
+#[derive(Debug, Subcommand)]
+pub enum StateCommand {
+    Inspect {
+        #[arg(long)]
+        directory: PathBuf,
+    },
+    Import {
+        #[arg(long)]
+        directory: PathBuf,
+        #[arg(long)]
+        file: PathBuf,
+    },
+}
+#[derive(Debug, Subcommand)]
+pub enum ScanCommand {
+    Metadata {
+        #[arg(long, required = true)]
+        source: Vec<PathBuf>,
+    },
+    Read {
+        #[arg(long, required = true)]
+        source: Vec<PathBuf>,
+        #[arg(long)]
+        rate_bytes_per_second: Option<u64>,
+    },
 }

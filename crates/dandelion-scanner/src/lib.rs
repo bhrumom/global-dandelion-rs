@@ -161,6 +161,89 @@ fn scan<A: SourceAccess>(
     Ok(summary)
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct MetadataSummary {
+    pub regular_files: u64,
+    pub directories: u64,
+    pub total_file_bytes: u64,
+    pub payload_bytes_read: u64,
+}
+/// Pure metadata traversal: it never opens file payloads and honors cancellation.
+pub fn inspect_metadata(
+    options: ScanOptions,
+    cancel: CancellationToken,
+) -> Result<MetadataSummary> {
+    if options.roots.is_empty()
+        || options.roots.len() > 64
+        || !(1..=64).contains(&options.max_depth)
+    {
+        return Err(Error::Config("invalid metadata scan bounds".into()));
+    }
+    let mut roots = options
+        .roots
+        .iter()
+        .map(std::fs::canonicalize)
+        .collect::<std::io::Result<Vec<_>>>()?;
+    roots.sort();
+    roots.dedup();
+    let mut unique = Vec::<PathBuf>::new();
+    for root in roots {
+        if root.parent().is_none() {
+            return Err(Error::Config("filesystem root is not a data source".into()));
+        }
+        if !unique.iter().any(|p| root.starts_with(p)) {
+            unique.push(root);
+        }
+    }
+    let mut summary = MetadataSummary {
+        regular_files: 0,
+        directories: 0,
+        total_file_bytes: 0,
+        payload_bytes_read: 0,
+    };
+    for root in unique {
+        let walker = WalkDir::new(root)
+            .follow_links(false)
+            .same_file_system(true)
+            .max_depth(options.max_depth)
+            .max_open(options.max_depth + 1)
+            .into_iter()
+            .filter_entry(|entry| {
+                entry.depth() == 0
+                    || ((!options.exclude_hidden
+                        || !entry.file_name().as_encoded_bytes().starts_with(b"."))
+                        && !options
+                            .excluded_names
+                            .iter()
+                            .any(|s| entry.file_name() == s.as_str()))
+            });
+        for entry in walker {
+            if cancel.is_cancelled() {
+                return Err(Error::Cancelled);
+            }
+            let entry = entry.map_err(|e| Error::Scan(e.to_string()))?;
+            if entry.file_type().is_file() {
+                if summary.regular_files >= options.max_files {
+                    return Err(Error::Scan("metadata file count limit reached".into()));
+                }
+                summary.regular_files += 1;
+                summary.total_file_bytes = summary
+                    .total_file_bytes
+                    .checked_add(
+                        entry
+                            .metadata()
+                            .map_err(|e| Error::Scan(e.to_string()))?
+                            .len(),
+                    )
+                    .ok_or_else(|| Error::Scan("metadata size overflow".into()))?;
+            } else if entry.file_type().is_dir() {
+                summary.directories += 1;
+            }
+        }
+    }
+    Ok(summary)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

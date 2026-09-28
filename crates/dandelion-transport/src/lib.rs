@@ -12,6 +12,9 @@ pub struct Receipt {
 }
 
 pub trait Transport: Send {
+    fn wire_cost(&self, packet: &[u8]) -> u64 {
+        packet.len() as u64
+    }
     fn transmit(
         &mut self,
         packet: &[u8],
@@ -63,6 +66,24 @@ impl Transport for Loopback {
             _ = cancel.cancelled() => Err(Error::Cancelled),
             result = tokio::time::timeout(Duration::from_secs(1), exchange) => result.map_err(|_| Error::VerifierTimeout)?,
         }
+    }
+}
+
+/// Read-only surface pass: decode and verify streamed chunks, no socket opened.
+pub struct ReadVerifier;
+impl Transport for ReadVerifier {
+    fn wire_cost(&self, _packet: &[u8]) -> u64 {
+        0
+    }
+    async fn transmit(&mut self, packet: &[u8], cancel: &CancellationToken) -> Result<Receipt> {
+        if cancel.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        let frame = dandelion_packet::decode(packet)?;
+        Ok(Receipt {
+            accepted_wire_bytes: 0,
+            verified_payload_bytes: frame.payload.len() as u64,
+        })
     }
 }
 

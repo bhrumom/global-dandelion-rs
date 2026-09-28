@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Require a disposition, an honest implementation status and evidence paths."""
+import argparse
 import json
 from pathlib import Path
 root = Path(__file__).resolve().parents[1]
@@ -23,3 +24,11 @@ print(json.dumps({"parity_ledger": "pass", "rows": len(seen),
                   "implemented": sum(r["status"] == "implemented" for r in data["capabilities"]),
                   "pending": sum(r["status"] == "pending" for r in data["capabilities"]),
                   "full_migration_complete": False}))
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--require-complete", action="store_true")
+args = parser.parse_args()
+if args.require_complete:
+    pending = [r["id"] for r in data["capabilities"] if r["status"] == "pending"]
+    assert not pending, f"Full replacement blocked: {pending}"
+    assert data.get("full_acceptance_evidence"), "Full cutover requires hardware, security and baseline evidence"
