@@ -24,7 +24,7 @@ import time
 
 SOURCE_COMMIT = "aa7f3720c42856f0e1d18742f78fba156227ee79"
 SOURCE_BLOB = "54bf6226eb80d1ef6c4f6087fb02579141ab134f"
-RUST_COMMIT = "be50bdee0266b873c2cfcd46e8b504ebef3035a9"
+
 REQUIRED_SNIPPETS = (
     "for root, dirs, files in os.walk(directory, topdown=True):",
     "dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']",
@@ -265,7 +265,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--python-source", type=Path)
-    parser.add_argument("--tested-commit", default=RUST_COMMIT)
+    parser.add_argument("--tested-commit")
+    parser.add_argument("--artifact-head-commit")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--large-mib", type=int, default=64)
     parser.add_argument("--small-files", type=int, default=1000)
@@ -290,8 +291,12 @@ def main() -> None:
         raise SystemExit("--binary and --python-source are required")
     if args.repeats < 3:
         raise SystemExit("--repeats must be at least 3")
-    if args.tested_commit != RUST_COMMIT:
-        raise SystemExit(f"harness is pinned to Rust commit {RUST_COMMIT}; update/review before using a new commit")
+    if not args.tested_commit or not args.artifact_head_commit:
+        raise SystemExit("--tested-commit and --artifact-head-commit are required")
+    if len(args.tested_commit) != 40 or any(ch not in "0123456789abcdef" for ch in args.tested_commit.lower()):
+        raise SystemExit("--tested-commit must be a full 40-hex commit SHA")
+    if args.artifact_head_commit != args.tested_commit:
+        raise SystemExit("artifact workflow head_sha must equal the exact tested commit")
     verify_source(args.python_source)
     binary = str(args.binary.resolve())
     env = {k: v for k, v in os.environ.items() if not k.startswith("DANDELION_")}
@@ -343,6 +348,7 @@ def main() -> None:
             "schema_version": 1,
             "gate_id": "controlled-cutover",
             "tested_commit": args.tested_commit,
+            "artifact_workflow_head_commit": args.artifact_head_commit,
             "result": "pass",
             "performed_by": f"controlled-cutover.py on {socket.gethostname()}",
             "python_source_commit": SOURCE_COMMIT,
