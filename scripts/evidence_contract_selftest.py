@@ -43,6 +43,7 @@ def report_for(gate_id: str) -> dict:
                     "github_zip_sha256": "a" * 64,
                     "workflow_head_commit": current,
                     "build_info_commit": current,
+                    "comparison_commit": current,
                     "outer_archive_checksum_verified": True,
                     "inner_sha256sums_verified": True,
                     "self_test_passed": True,
