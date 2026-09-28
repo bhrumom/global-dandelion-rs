@@ -16,6 +16,7 @@ from disk_guard import check
 
 p = argparse.ArgumentParser()
 p.add_argument('--binary', type=Path)
+p.add_argument('--rust-sha')
 p.add_argument('--worker', action='store_true')
 p.add_argument('--iterations', type=int, default=100000)
 p.add_argument('--chunk-bytes', type=int, default=1024)
@@ -30,6 +31,8 @@ if a.worker:
                       'final_packet_md5': hashlib.md5(packet).hexdigest(), 'network_bytes': 0}))
     sys.exit(0)
 assert a.binary
+if not a.rust_sha or len(a.rust_sha) != 40 or any(ch not in '0123456789abcdef' for ch in a.rust_sha.lower()):
+    raise SystemExit('--rust-sha must be a full 40-hex commit SHA')
 check(Path(tempfile.gettempdir()), 16 * 1024**2)
 binary = str(a.binary.resolve())
 env = {k: v for k, v in os.environ.items() if not k.startswith('DANDELION_')}
@@ -61,7 +64,7 @@ for size in [1024, 1152]:
 print(json.dumps({
     'schema_version': 1, 'source_commit': 'aa7f3720c42856f0e1d18742f78fba156227ee79',
     'source_blob': '54bf6226eb80d1ef6c4f6087fb02579141ab134f', 'source_scope': 'reviewed pure packet expression only',
-    'rust_sha': os.environ.get('GITHUB_SHA'), 'hardware': {'machine': platform.machine(), 'kernel': platform.release(), 'cpu_count': os.cpu_count()},
+    'rust_sha': a.rust_sha, 'hardware': {'machine': platform.machine(), 'kernel': platform.release(), 'cpu_count': os.cpu_count()},
     'python': sys.version, 'workload': 'u32be + MD5 + 0x5a payload, allocating a complete packet each iteration; no network',
     'limitations': 'shared CI hardware; GNU time CPU resolution 0.01 s; process RSS includes startup; not whole-program cutover or TLS/drive throughput',
     'samples': rows, 'summary': summary,
