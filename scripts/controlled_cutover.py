@@ -267,6 +267,7 @@ def main() -> None:
     parser.add_argument("--python-source", type=Path)
     parser.add_argument("--tested-commit")
     parser.add_argument("--artifact-head-commit")
+    parser.add_argument("--artifact-build-info", type=Path)
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--large-mib", type=int, default=64)
     parser.add_argument("--small-files", type=int, default=1000)
@@ -291,12 +292,16 @@ def main() -> None:
         raise SystemExit("--binary and --python-source are required")
     if args.repeats < 3:
         raise SystemExit("--repeats must be at least 3")
-    if not args.tested_commit or not args.artifact_head_commit:
-        raise SystemExit("--tested-commit and --artifact-head-commit are required")
+    if not args.tested_commit or not args.artifact_head_commit or not args.artifact_build_info:
+        raise SystemExit("--tested-commit, --artifact-head-commit and --artifact-build-info are required")
     if len(args.tested_commit) != 40 or any(ch not in "0123456789abcdef" for ch in args.tested_commit.lower()):
         raise SystemExit("--tested-commit must be a full 40-hex commit SHA")
     if args.artifact_head_commit != args.tested_commit:
         raise SystemExit("artifact workflow head_sha must equal the exact tested commit")
+    build_info = args.artifact_build_info.read_text(encoding="utf-8")
+    build_sha = next((line.split("=", 1)[1].strip() for line in build_info.splitlines() if line.startswith("git_sha=")), None)
+    if build_sha != args.tested_commit:
+        raise SystemExit(f"artifact BUILD-INFO git_sha {build_sha!r} does not equal tested commit {args.tested_commit}")
     verify_source(args.python_source)
     binary = str(args.binary.resolve())
     env = {k: v for k, v in os.environ.items() if not k.startswith("DANDELION_")}
@@ -349,6 +354,7 @@ def main() -> None:
             "gate_id": "controlled-cutover",
             "tested_commit": args.tested_commit,
             "artifact_workflow_head_commit": args.artifact_head_commit,
+            "artifact_build_info_commit": build_sha,
             "result": "pass",
             "performed_by": f"controlled-cutover.py on {socket.gethostname()}",
             "python_source_commit": SOURCE_COMMIT,
