@@ -175,3 +175,20 @@ and the sole physical block device is the non-hotplug/non-removable system disk 
 Therefore neither physical-hotspot nor physical-hotplug is promoted from that host.
 This change invalidates prior exact-HEAD candidate evidence for completion purposes;
 fresh reports must bind the new commit after its CI succeeds.
+
+## Packaged comparison exact-commit provenance closure
+
+Artifact inspection of exact-head run 36455047164 found a second PR-event provenance
+split after BUILD-INFO had already been repaired: both native artifacts correctly
+recorded git_sha=7ef2182db96126ac6011f56d34a723b326647bf9, while the packaged
+python-rust-comparison.json still recorded GitHub's synthetic pull-request merge SHA
+through GITHUB_SHA. The binary and checksums were valid, but a single package carrying
+two commit identities is not acceptable exact-commit evidence.
+
+python_comparison.py now requires an explicit full --rust-sha and CI passes
+TESTED_COMMIT, never GITHUB_SHA. The current-ci semantic verifier also requires every
+native artifact evidence entry to bind comparison_commit to the exact tested commit,
+and the synthetic evidence self-test covers that field. Run 36455047164 remains a
+useful historical measurement but is not final current-ci evidence after this repair;
+a fresh exact-head run and freshly inspected artifacts are required.
+
