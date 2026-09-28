@@ -79,6 +79,15 @@ pub enum RunStatus {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TargetHealth {
+    pub address: std::net::SocketAddr,
+    pub authenticated: bool,
+    pub verified_packets: u64,
+    pub verified_payload_bytes: u64,
+    pub accepted_ciphertext_bytes: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Snapshot {
     pub schema_version: u32,
     pub status: RunStatus,
@@ -89,6 +98,8 @@ pub struct Snapshot {
     pub verified_payload_bytes: u64,
     pub skipped_entries: u64,
     pub elapsed_ms: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<TargetHealth>,
 }
 
 impl Default for Snapshot {
@@ -103,6 +114,7 @@ impl Default for Snapshot {
             verified_payload_bytes: 0,
             skipped_entries: 0,
             elapsed_ms: 0,
+            targets: Vec::new(),
         }
     }
 }

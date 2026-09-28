@@ -518,13 +518,14 @@ fn clock(cli: &Cli, peer: bool) -> Result<()> {
         cfg.pacing.burst_bytes,
     )?;
     meter.set_schedule(cfg.pacing.schedule.clone())?;
+    let runtime_meter = meter.clone();
     let results = execution::drive(
         Duration::from_millis(cfg.runtime.shutdown_timeout_ms),
-        |cancel| async {
+        |cancel| async move {
             let mut transport = dandelion_transport::tls::Peers::connect(
                 &peers,
                 tls,
-                meter.clone(),
+                runtime_meter.clone(),
                 Duration::from_millis(settings.timeout_ms),
                 settings.connect_attempts,
                 &cancel,

@@ -80,3 +80,9 @@ reporting. No existing user directory permissions are changed.
 Clock/telemetry increment: local metadata and optional authenticated peer clock
 comparison, metered and durable-budgeted, with no host-clock mutation or UTC accuracy
 claim. Added monotonic live rate estimation and actual mTLS clock-fixture acceptance.
+
+Per-target health now includes authenticated peer identity, verified packet/payload
+counts and actual ciphertext accepted on that peer's metered socket. Successful
+repeat sessions aggregate these values; failures log the available target snapshot
+instead of pretending completion. Backward-compatible empty fields preserve legacy
+state checksums. Real TLS acceptance checks target/socket totals agree.

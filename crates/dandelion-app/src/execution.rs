@@ -300,6 +300,28 @@ async fn service(
         sum!(accepted_wire_bytes);
         sum!(verified_payload_bytes);
         sum!(skipped_entries);
+        for target in stats.targets {
+            if let Some(existing) = total
+                .targets
+                .iter_mut()
+                .find(|t| t.address == target.address)
+            {
+                existing.verified_packets = existing
+                    .verified_packets
+                    .checked_add(target.verified_packets)
+                    .ok_or_else(|| Error::Task("target packet counter overflow".into()))?;
+                existing.verified_payload_bytes = existing
+                    .verified_payload_bytes
+                    .checked_add(target.verified_payload_bytes)
+                    .ok_or_else(|| Error::Task("target payload counter overflow".into()))?;
+                existing.accepted_ciphertext_bytes = existing
+                    .accepted_ciphertext_bytes
+                    .checked_add(target.accepted_ciphertext_bytes)
+                    .ok_or_else(|| Error::Task("target wire counter overflow".into()))?;
+            } else {
+                total.targets.push(target);
+            }
+        }
         total.status = stats.status;
         cycles += 1;
         if total.status != RunStatus::Completed || (!options.watch && cycles >= options.repeat) {

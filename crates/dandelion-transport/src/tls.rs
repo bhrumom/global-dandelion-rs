@@ -106,6 +106,7 @@ enum Incoming {
 pub struct Peers {
     streams: Vec<tokio_rustls::client::TlsStream<Metered<TcpStream>>>,
     timeout: Duration,
+    health: Vec<dandelion_core::TargetHealth>,
 }
 impl Peers {
     /// Read-only authenticated peer wall-clock comparison, not a UTC authority.
@@ -157,6 +158,7 @@ impl Peers {
         }
         let connector = TlsConnector::from(config);
         let mut streams = Vec::new();
+        let mut health = Vec::new();
         for peer in peers {
             let name = ServerName::try_from(peer.server_name().to_owned()).map_err(config_error)?;
             let mut last_error = None;
@@ -177,6 +179,13 @@ impl Peers {
                 match result {
                     Ok(stream) => {
                         streams.push(stream);
+                        health.push(dandelion_core::TargetHealth {
+                            address: peer.address(),
+                            authenticated: true,
+                            verified_packets: 0,
+                            verified_payload_bytes: 0,
+                            accepted_ciphertext_bytes: 0,
+                        });
                         last_error = None;
                         break;
                     }
@@ -198,10 +207,26 @@ impl Peers {
                 return Err(error);
             }
         }
-        Ok(Self { streams, timeout })
+        Ok(Self {
+            streams,
+            timeout,
+            health,
+        })
     }
 }
 impl Transport for Peers {
+    fn health(&self) -> Vec<dandelion_core::TargetHealth> {
+        self.streams
+            .iter()
+            .zip(&self.health)
+            .map(|(stream, health)| {
+                let mut snapshot = health.clone();
+                snapshot.accepted_ciphertext_bytes = stream.get_ref().0.accepted_bytes();
+                snapshot
+            })
+            .collect()
+    }
+
     fn wire_cost(&self, packet: &[u8]) -> u64 {
         (packet.len() as u64 + 4) * self.streams.len() as u64
     }
@@ -232,7 +257,7 @@ impl Transport for Peers {
             accepted_wire_bytes: 0,
             verified_payload_bytes: 0,
         };
-        for stream in &mut self.streams {
+        for (stream, health) in self.streams.iter_mut().zip(&mut self.health) {
             let transfer = async {
                 stream
                     .write_u32(packet.len() as u32)
@@ -252,6 +277,8 @@ impl Transport for Peers {
                 Ok(())
             };
             tokio::select! {biased;_=cancel.cancelled()=>return Err(Error::Cancelled),result=tokio::time::timeout(self.timeout,transfer)=>result.map_err(|_|Error::VerifierTimeout)??,}
+            health.verified_packets += 1;
+            health.verified_payload_bytes += decoded.payload.len() as u64;
             receipt.accepted_wire_bytes += packet.len() as u64 + 4;
             receipt.verified_payload_bytes += decoded.payload.len() as u64;
         }

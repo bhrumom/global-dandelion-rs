@@ -110,6 +110,10 @@ impl Supervisor {
         if sent.is_ok() && scan.is_ok() {
             sent = tokio::select! {biased;_=cancel.cancelled()=>Err(Error::Cancelled),result=transport.finish(&cancel)=>result};
         }
+        snapshot.targets = transport.health();
+        if let Err(error) = &sent {
+            tracing::warn!(targets=?snapshot.targets,error=%error,"transport_session_not_completed");
+        }
         match sent {
             Ok(()) => {
                 snapshot.skipped_entries = scan?.skipped_entries;

@@ -105,13 +105,19 @@ pub struct Metered<T> {
     inner: T,
     budget: WireBudget,
     sleep: Option<Pin<Box<Sleep>>>,
+    local_accepted: u64,
 }
 impl<T> Metered<T> {
+    pub fn accepted_bytes(&self) -> u64 {
+        self.local_accepted
+    }
+
     pub fn new(inner: T, budget: WireBudget) -> Self {
         Self {
             inner,
             budget,
             sleep: None,
+            local_accepted: 0,
         }
     }
 }
@@ -160,6 +166,7 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for Metered<T> {
             Poll::Ready(Ok(n)) => {
                 state.charged += n as u64;
                 state.accepted += n as u64;
+                this.local_accepted += n as u64;
                 state.credits -= n as u128 * SCALE;
                 Poll::Ready(Ok(n))
             }

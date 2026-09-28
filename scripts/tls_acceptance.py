@@ -94,6 +94,8 @@ authorized = true
                 assert client.returncode==0,(client.returncode,client.stderr)
                 stats=json.loads(client.stdout)
                 assert stats["verified_payload_bytes"]==len(payload),stats
+                assert len(stats["targets"])==1 and stats["targets"][0]["authenticated"]
+                assert stats["targets"][0]["accepted_ciphertext_bytes"]==stats["accepted_wire_bytes"]
                 assert stats["attempted_wire_bytes"]>len(payload),"TLS handshake/record bytes must be included"
                 assert report["verified_payload_bytes"]==len(payload),report
                 assert report["failed_sessions"]==0 and receiver.returncode==0,(report,stderr)

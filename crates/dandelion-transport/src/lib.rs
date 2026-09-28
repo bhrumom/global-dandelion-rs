@@ -12,6 +12,10 @@ pub struct Receipt {
 }
 
 pub trait Transport: Send {
+    fn health(&self) -> Vec<dandelion_core::TargetHealth> {
+        Vec::new()
+    }
+
     /// Finish a successful session. Default adapters have no stream to close.
     fn finish(&mut self, _cancel: &CancellationToken) -> impl Future<Output = Result<()>> + Send {
         async { Ok(()) }
