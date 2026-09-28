@@ -347,7 +347,8 @@ gate-ID mismatch or self-review MUST fail the complete gate.
 
 Gate reports are not generic pass envelopes. The verifier enforces gate-specific
 semantics before full replacement can become true: current-ci must bind both native
-artifacts and their BUILD-INFO/checksums/self-tests to the exact commit; hotspot
+artifacts, their BUILD-INFO and packaged python-rust-comparison commit, checksums and
+self-tests to the exact commit; hotspot
 must identify real non-virtual Wi-Fi hardware and prove apply/interruption/rollback;
 hotplug must identify original and replacement physical devices and prove old
 checkpoint rejection at the same mount path; controlled-cutover must contain raw
