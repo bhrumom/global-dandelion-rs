@@ -29,10 +29,14 @@ use a quarantined benchmark harness limited to synthetic local fixtures. Label
 wire-format/verification differences rather than treating them as identical work.
 The new protocol's larger metadata/checksum is not the legacy MD5 contract.
 
-Remaining acceptance: baseline helper and parity workload comparison, repeated
-long-duration backpressure trials, mutation/drive-unplug fault injection, verified
-external transport, and hardware-controlled CPU/GiB and throughput assessment.
-The engineering targets in the Spec are targets, not measured achievements.
+The reviewed baseline helper and same-host cutover harness now exist, but their
+successful execution is only candidate evidence until it is bound to an exact-head
+artifact and independently reviewed. Remaining external acceptance still includes
+representative physical Wi-Fi hotspot and storage hotplug/replacement proof,
+production release trust, and controlled-cutover review. Longer-duration
+backpressure/fault-injection measurements remain useful engineering evidence but do
+not replace those five formal gates. The engineering targets in the Spec are targets,
+not measured achievements.
 
 ## Equivalent legacy packet comparison
 
