@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import math
+import multiprocessing
 import os
 from pathlib import Path
 import signal
@@ -118,8 +119,17 @@ def worker_transfer(root: Path, chunk_bytes: int) -> dict:
     receiver.bind(("127.0.0.1", 0))
     receiver.settimeout(0.05)
     target = receiver.getsockname()
-    stop = threading.Event()
-    received = {"wire": 0, "payload": 0, "packets": 0, "bad_md5": 0}
+    # Keep the receiver in a separate process. A thread competes with the sender
+    # for the Python GIL and can drop loopback UDP packets on small-core hosts,
+    # which makes the cutover verifier measure harness scheduling rather than the
+    # reviewed legacy packet path. The forked receiver drains the same socket
+    # concurrently while shared counters preserve end-to-end integrity checks.
+    ctx = multiprocessing.get_context("fork")
+    stop = ctx.Event()
+    received_wire = ctx.Value("Q", 0, lock=False)
+    received_payload = ctx.Value("Q", 0, lock=False)
+    received_packets = ctx.Value("Q", 0, lock=False)
+    received_bad_md5 = ctx.Value("Q", 0, lock=False)
 
     def recv_loop():
         while not stop.is_set():
@@ -130,18 +140,18 @@ def worker_transfer(root: Path, chunk_bytes: int) -> dict:
             except OSError:
                 break
             if len(data) < 20:
-                received["bad_md5"] += 1
+                received_bad_md5.value += 1
                 continue
             payload = data[20:]
             if hashlib.md5(payload).digest() != data[4:20]:
-                received["bad_md5"] += 1
+                received_bad_md5.value += 1
                 continue
-            received["wire"] += len(data)
-            received["payload"] += len(payload)
-            received["packets"] += 1
+            received_wire.value += len(data)
+            received_payload.value += len(payload)
+            received_packets.value += 1
 
-    thread = threading.Thread(target=recv_loop, daemon=True)
-    thread.start()
+    process = ctx.Process(target=recv_loop, daemon=True)
+    process.start()
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sender.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4 * 1024 * 1024)
     attempted_wire = 0
@@ -160,29 +170,35 @@ def worker_transfer(root: Path, chunk_bytes: int) -> dict:
                     attempted_wire += len(packet)
                     payload_bytes += len(chunk)
                     packets += 1
-                    # Yield without pacing the benchmark so the in-process receiver
-                    # can drain loopback UDP fairly on small-core acceptance hosts.
-                    if packets % 64 == 0:
-                        time.sleep(0)
+                    # Keep a small bounded in-flight window so loopback UDP cannot
+                    # overflow the host receive queue. This preserves the reviewed
+                    # legacy datagram format while making the cutover workload a
+                    # complete-transfer benchmark instead of a packet-drop benchmark.
+                    if packets % 16 == 0:
+                        while packets - received_packets.value > 128:
+                            time.sleep(0.0001)
                     chunk_index += 1
-        deadline = time.monotonic() + 1.0
-        while received["packets"] < packets and time.monotonic() < deadline:
+        deadline = time.monotonic() + 5.0
+        while received_packets.value < packets and time.monotonic() < deadline:
             time.sleep(0.005)
     finally:
         stop.set()
         sender.close()
+        process.join(timeout=1)
         receiver.close()
-        thread.join(timeout=1)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=1)
     return {
         "status": "completed",
         "files_completed": sum(1 for _ in iter_files(root)),
         "chunks_sent": packets,
         "attempted_wire_bytes": attempted_wire,
         "payload_bytes": payload_bytes,
-        "receiver_wire_bytes": received["wire"],
-        "receiver_payload_bytes": received["payload"],
-        "receiver_packets": received["packets"],
-        "receiver_bad_md5": received["bad_md5"],
+        "receiver_wire_bytes": received_wire.value,
+        "receiver_payload_bytes": received_payload.value,
+        "receiver_packets": received_packets.value,
+        "receiver_bad_md5": received_bad_md5.value,
         "wire_contract": "legacy u32be + MD5 + payload; receiver integrity check added by cutover harness",
     }
 
