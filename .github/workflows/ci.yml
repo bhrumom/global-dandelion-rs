@@ -14,6 +14,7 @@ env:
   CARGO_BUILD_JOBS: '2'
   CARGO_INCREMENTAL: '0'
   RUST_BACKTRACE: '1'
+  TESTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
   quality:
     name: Quality / ${{ matrix.target }}
@@ -31,6 +32,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ env.TESTED_COMMIT }}
+      - name: Verify exact tested revision
+        run: test "$(git rev-parse HEAD)" = "$TESTED_COMMIT"
       - name: Storage preflight
         run: python3 scripts/disk_guard.py --planned-bytes 6442450944
       - name: Pinned Rust toolchain
@@ -75,7 +79,7 @@ jobs:
           cp Cargo.lock dist/
           python3 scripts/license_report.py
           python3 scripts/python_comparison.py --binary target/release/dandelion > dist/python-rust-comparison.json
-          { printf 'git_sha=%s\n' "$GITHUB_SHA"; rustc -Vv; cargo -V; } > dist/BUILD-INFO.txt
+          { printf 'git_sha=%s\n' "$TESTED_COMMIT"; rustc -Vv; cargo -V; } > dist/BUILD-INFO.txt
           cp acceptance-${{ matrix.target }}.json tls-acceptance-${{ matrix.target }}.json update-acceptance-${{ matrix.target }}.json tui-acceptance-${{ matrix.target }}.json dist/
           if [ "${{ matrix.target }}" = x86_64-unknown-linux-gnu ]; then
             python3 scripts/benchmark_report.py > dist/packet-benchmark.json
@@ -93,7 +97,7 @@ jobs:
           package-check/dandelion self-test --json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: dandelion-${{ matrix.target }}-${{ github.sha }}
+          name: dandelion-${{ matrix.target }}-${{ env.TESTED_COMMIT }}
           path: |
             dandelion-${{ matrix.target }}.tar.gz
             dandelion-${{ matrix.target }}.tar.gz.sha256
@@ -107,6 +111,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ env.TESTED_COMMIT }}
+      - name: Verify exact tested revision
+        run: test "$(git rev-parse HEAD)" = "$TESTED_COMMIT"
       - name: Storage preflight
         run: python3 scripts/disk_guard.py --planned-bytes 8589934592
       - name: Pinned Rust toolchain
