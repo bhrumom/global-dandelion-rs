@@ -191,6 +191,7 @@ pub fn exercise(
     super::disk_space(parent)?.check(1024 * 1024)?;
     let workspace = tempfile::Builder::new()
         .prefix(".dandelion-link-")
+        .permissions(fs::Permissions::from_mode(0o700))
         .tempdir_in(parent)?
         .keep();
     let _lock = lock(&workspace)?;

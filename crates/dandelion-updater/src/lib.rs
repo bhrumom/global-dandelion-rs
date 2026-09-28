@@ -213,7 +213,9 @@ pub fn stage<R: Read, G: WriteGuard>(
     if destination.exists() {
         return Err(failure("version already staged; refusing overwrite"));
     }
-    let temp = tempfile::tempdir_in(&root)?;
+    let temp = tempfile::Builder::new()
+        .permissions(fs::Permissions::from_mode(0o700))
+        .tempdir_in(&root)?;
     let mut artifact = File::create(temp.path().join("artifact"))?;
     let mut hasher = digest::Context::new(&digest::SHA256);
     let mut read = reader.take(manifest.size + 1);

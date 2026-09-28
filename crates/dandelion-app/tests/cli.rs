@@ -325,5 +325,9 @@ fn native_country_and_link_compatibility_commands() {
         j["workspace"].as_str().unwrap(),
         "--confirm",
     ]);
-    assert!(out.status.success());
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

@@ -70,3 +70,9 @@ The unsafe filename-pattern deletion heuristic is not restored.
 Acceptance additions: actual isolated PTY terminal entry/restore under SIGTERM and
 an equivalent pure Python/Rust packet benchmark. Neither changes user terminal,
 network configuration or production files. Both run only on disposable CI runners.
+
+CI run 36430585509 exposed a permissions mismatch in compatibility recovery:
+tempfile directories default to umask-filtered 0777, while recovery correctly
+requires a private directory. Set 0700 explicitly at creation for link workspaces
+and update staging bundles; keep the strict recovery check, and improve test error
+reporting. No existing user directory permissions are changed.
