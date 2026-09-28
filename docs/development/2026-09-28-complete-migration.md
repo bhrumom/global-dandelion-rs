@@ -143,3 +143,35 @@ On acceptance host bhrum2, the negative provenance check was exercised against t
 old artifact and correctly failed with the synthetic-merge BUILD-INFO SHA mismatch.
 The next exact-head CI run and artifact must complete successfully before current-ci
 or controlled-cutover candidate evidence can advance.
+
+
+## Gate-specific evidence semantic closure
+
+A continuation audit found another fail-open path in full-replacement acceptance:
+check_parity.py authenticated report bytes, commit/gate binding and distinct reviewer
+names, but a correctly hashed minimal report could still say result=pass without
+containing the physical or production facts required by that gate. Reviewer metadata
+was also not bound to the exact report digest and commit.
+
+The verifier now rejects generic pass envelopes. Each of the five gates has explicit
+semantic validation matching the Spec. current-ci requires both native artifacts and
+exact BUILD-INFO/checksum/self-test provenance; physical-hotspot requires real
+non-virtual Wi-Fi identity plus apply/interruption/rollback; physical-hotplug requires
+distinct real original/replacement device identities and same-path checkpoint
+invalidation/recovery; controlled-cutover requires raw repeated same-fixture samples
+and complete Python/Rust transfer integrity; production-release-trust requires a
+non-synthetic production signing identity/origin plus activation and rollback health.
+Reviewer entries now bind approve to the exact report digest and tested commit and
+must provide an immutable external review reference.
+
+The evidence self-test now has a negative case that recomputes a valid digest around a
+semantically empty hotspot report and confirms it still fails. controlled_cutover.py
+also now fails if the legacy UDP receiver loses packets/payload or wire-byte accounting
+does not match, rather than treating only MD5 corruption as failure.
+
+Acceptance-host inventory was rechecked on bhrum2 while making this change: only
+enp0s6 plus loopback/Docker interfaces are present, NetworkManager nmcli is absent,
+and the sole physical block device is the non-hotplug/non-removable system disk sda.
+Therefore neither physical-hotspot nor physical-hotplug is promoted from that host.
+This change invalidates prior exact-HEAD candidate evidence for completion purposes;
+fresh reports must bind the new commit after its CI succeeds.

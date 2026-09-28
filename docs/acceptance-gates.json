@@ -34,7 +34,11 @@
       "result",
       "report",
       "report_sha256",
-      "reviewed_by"
+      "reviewed_by",
+      "reviewed_report_sha256",
+      "reviewed_commit",
+      "review_decision",
+      "review_reference"
     ],
     "required_report_fields": [
       "schema_version",
@@ -43,7 +47,46 @@
       "result",
       "performed_by"
     ],
-    "reviewer_rule": "reviewed_by must be non-empty and differ case-insensitively from report.performed_by",
-    "report_rule": "report must be a regular file opened without following symlinks; its SHA-256, gate_id, tested_commit and pass result must verify"
+    "reviewer_rule": "reviewed_by must be non-empty and differ case-insensitively from report.performed_by; review binding must approve the exact gate report digest and tested commit and provide an immutable external review reference",
+    "report_rule": "report must be a regular file opened without following symlinks; its SHA-256, gate_id, tested_commit, pass result and gate-specific semantic requirements must verify",
+    "gate_specific_semantics": {
+      "current-ci": [
+        "successful exact-commit workflow",
+        "all four required jobs successful",
+        "x86_64 and aarch64 artifacts bind workflow head and BUILD-INFO to tested commit",
+        "GitHub ZIP digest is recorded",
+        "outer checksum, inner SHA256SUMS and packaged self-test verified"
+      ],
+      "physical-hotspot": [
+        "real non-virtual Wi-Fi hardware identity, interface and driver",
+        "AP capability verified",
+        "real plan/apply/active verification",
+        "interruption exercised",
+        "owned-profile rollback verified",
+        "previous connection restored when one existed"
+      ],
+      "physical-hotplug": [
+        "real removable/hotplug original and replacement device identities",
+        "unmount during active scan and original reinsertion exercised",
+        "replacement mounted at the same path",
+        "old checkpoint rejected for replacement device",
+        "resume scope changed and service recovered"
+      ],
+      "controlled-cutover": [
+        "workflow artifact and BUILD-INFO bind exact tested commit",
+        "pinned Python source commit/blob verified",
+        "at least three repetitions",
+        "same non-empty fixture",
+        "metadata/read/transfer and shutdown raw samples for Python and Rust",
+        "complete transfer integrity"
+      ],
+      "production-release-trust": [
+        "real deployment environment",
+        "non-synthetic production signing identity and fingerprint",
+        "signature verified",
+        "actual production release origin and artifact digest/provenance",
+        "staging, activation, health verification, rollback and post-rollback health verified"
+      ]
+    }
   }
 }

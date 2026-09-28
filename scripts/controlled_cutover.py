@@ -338,8 +338,13 @@ def main() -> None:
         for sample in samples["transfer"]["rust"]:
             if sample["verified_payload_bytes"] != payload:
                 raise RuntimeError("Rust transfer did not verify the complete payload")
-        if any(sample["receiver_bad_md5"] for sample in samples["transfer"]["python"]):
-            raise RuntimeError("Python legacy transfer receiver observed an MD5 mismatch")
+        for sample in samples["transfer"]["python"]:
+            if sample["receiver_bad_md5"]:
+                raise RuntimeError("Python legacy transfer receiver observed an MD5 mismatch")
+            if sample["receiver_payload_bytes"] != payload or sample["receiver_packets"] != sample["chunks_sent"]:
+                raise RuntimeError("Python legacy transfer receiver did not receive the complete payload")
+            if sample["receiver_wire_bytes"] != sample["attempted_wire_bytes"]:
+                raise RuntimeError("Python legacy transfer receiver wire-byte accounting mismatch")
 
         shutdown = {"python": [], "rust": []}
         for repeat in range(args.repeats):

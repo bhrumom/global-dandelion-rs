@@ -11,6 +11,10 @@ import stat
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
+HEX40 = re.compile(r"[0-9a-fA-F]{40}")
+HEX64 = re.compile(r"[0-9a-fA-F]{64}")
+SOURCE_COMMIT = "aa7f3720c42856f0e1d18742f78fba156227ee79"
+SOURCE_BLOB = "54bf6226eb80d1ef6c4f6087fb02579141ab134f"
 
 def require(condition, message):
     if not condition:
@@ -45,6 +49,191 @@ def resolve_report(manifest: Path, value: str) -> Path:
     report = Path(value)
     return report if report.is_absolute() else manifest.parent / report
 
+def obj(value, label):
+    require(isinstance(value, dict), f"{label}: must be an object")
+    return value
+
+def arr(value, label):
+    require(isinstance(value, list), f"{label}: must be an array")
+    return value
+
+def text_field(value, key, label):
+    value = obj(value, label).get(key)
+    require(isinstance(value, str) and value.strip(), f"{label}.{key}: non-empty string required")
+    return value.strip()
+
+def bool_field(value, key, label, expected=True):
+    actual = obj(value, label).get(key)
+    require(actual is expected, f"{label}.{key}: must be {str(expected).lower()}")
+    return actual
+
+def positive_int_field(value, key, label):
+    actual = obj(value, label).get(key)
+    require(isinstance(actual, int) and not isinstance(actual, bool) and actual > 0,
+            f"{label}.{key}: positive integer required")
+    return actual
+
+def exact_commit(value, key, label, current):
+    actual = text_field(value, key, label)
+    require(HEX40.fullmatch(actual) is not None, f"{label}.{key}: full 40-hex commit required")
+    require(actual == current, f"{label}.{key}: must equal tested commit")
+    return actual
+
+def sha256_field(value, key, label):
+    actual = text_field(value, key, label)
+    require(HEX64.fullmatch(actual) is not None, f"{label}.{key}: SHA-256 required")
+    return actual.lower()
+
+def validate_current_ci(report, current):
+    workflow = obj(report.get("workflow"), "current-ci.workflow")
+    positive_int_field(workflow, "run_id", "current-ci.workflow")
+    require(text_field(workflow, "conclusion", "current-ci.workflow") == "success",
+            "current-ci.workflow.conclusion: must be success")
+    exact_commit(workflow, "tested_commit", "current-ci.workflow", current)
+    jobs = obj(report.get("jobs"), "current-ci.jobs")
+    for name in ("quality_x86_64", "quality_aarch64", "dependency_policy", "required_acceptance_gate"):
+        require(jobs.get(name) == "success", f"current-ci.jobs.{name}: must be success")
+    artifacts = arr(report.get("artifacts"), "current-ci.artifacts")
+    by_arch = {}
+    for item in artifacts:
+        item = obj(item, "current-ci artifact")
+        arch = text_field(item, "architecture", "current-ci artifact")
+        require(arch not in by_arch, f"current-ci: duplicate artifact architecture {arch}")
+        by_arch[arch] = item
+    expected = {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"}
+    require(expected <= set(by_arch), "current-ci: both native architecture artifacts are required")
+    for arch in sorted(expected):
+        item = by_arch[arch]
+        positive_int_field(item, "artifact_id", f"current-ci artifact {arch}")
+        name = text_field(item, "artifact_name", f"current-ci artifact {arch}")
+        require(current in name, f"current-ci artifact {arch}: artifact name must contain tested commit")
+        sha256_field(item, "github_zip_sha256", f"current-ci artifact {arch}")
+        exact_commit(item, "workflow_head_commit", f"current-ci artifact {arch}", current)
+        exact_commit(item, "build_info_commit", f"current-ci artifact {arch}", current)
+        bool_field(item, "outer_archive_checksum_verified", f"current-ci artifact {arch}")
+        bool_field(item, "inner_sha256sums_verified", f"current-ci artifact {arch}")
+        bool_field(item, "self_test_passed", f"current-ci artifact {arch}")
+
+def validate_physical_hotspot(report):
+    env = obj(report.get("environment"), "physical-hotspot.environment")
+    text_field(env, "host", "physical-hotspot.environment")
+    text_field(env, "kernel", "physical-hotspot.environment")
+    hw = obj(report.get("hardware"), "physical-hotspot.hardware")
+    text_field(hw, "interface", "physical-hotspot.hardware")
+    text_field(hw, "driver", "physical-hotspot.hardware")
+    text_field(hw, "device_identity", "physical-hotspot.hardware")
+    bool_field(hw, "is_physical", "physical-hotspot.hardware")
+    bool_field(hw, "virtual_or_mock", "physical-hotspot.hardware", False)
+    bool_field(hw, "ap_supported", "physical-hotspot.hardware")
+    life = obj(report.get("lifecycle"), "physical-hotspot.lifecycle")
+    for key in ("plan_passed", "apply_passed", "active_ap_verified", "interruption_exercised",
+                "rollback_verified", "owned_profile_removed"):
+        bool_field(life, key, "physical-hotspot.lifecycle")
+    prior = life.get("prior_connection_present")
+    require(isinstance(prior, bool), "physical-hotspot.lifecycle.prior_connection_present: boolean required")
+    if prior:
+        bool_field(life, "prior_connection_restored", "physical-hotspot.lifecycle")
+
+def validate_physical_hotplug(report):
+    env = obj(report.get("environment"), "physical-hotplug.environment")
+    text_field(env, "host", "physical-hotplug.environment")
+    text_field(env, "kernel", "physical-hotplug.environment")
+    hw = obj(report.get("hardware"), "physical-hotplug.hardware")
+    original = obj(hw.get("original"), "physical-hotplug.hardware.original")
+    replacement = obj(hw.get("replacement"), "physical-hotplug.hardware.replacement")
+    for label, device in (("original", original), ("replacement", replacement)):
+        text_field(device, "device_identity", f"physical-hotplug.hardware.{label}")
+        text_field(device, "transport", f"physical-hotplug.hardware.{label}")
+        bool_field(device, "is_physical", f"physical-hotplug.hardware.{label}")
+        bool_field(device, "removable_or_hotplug", f"physical-hotplug.hardware.{label}")
+    require(original["device_identity"] != replacement["device_identity"],
+            "physical-hotplug: replacement device identity must differ from original")
+    life = obj(report.get("lifecycle"), "physical-hotplug.lifecycle")
+    for key in ("unmounted_during_active_scan", "original_reinserted",
+                "replacement_mounted_at_same_path", "old_checkpoint_rejected_for_replacement",
+                "resume_scope_changed_after_replacement", "service_recovered"):
+        bool_field(life, key, "physical-hotplug.lifecycle")
+
+def validate_controlled_cutover(report, current):
+    exact_commit(report, "artifact_workflow_head_commit", "controlled-cutover", current)
+    exact_commit(report, "artifact_build_info_commit", "controlled-cutover", current)
+    require(report.get("python_source_commit") == SOURCE_COMMIT,
+            "controlled-cutover.python_source_commit: wrong pinned source")
+    require(report.get("python_source_blob") == SOURCE_BLOB,
+            "controlled-cutover.python_source_blob: wrong pinned source blob")
+    repeats = positive_int_field(report, "repeats", "controlled-cutover")
+    require(repeats >= 3, "controlled-cutover.repeats: at least 3 required")
+    fixture = obj(report.get("fixture"), "controlled-cutover.fixture")
+    positive_int_field(fixture, "regular_files", "controlled-cutover.fixture")
+    positive_int_field(fixture, "total_file_bytes", "controlled-cutover.fixture")
+    workloads = obj(report.get("workloads"), "controlled-cutover.workloads")
+    for workload in ("metadata", "read", "transfer"):
+        pair = obj(workloads.get(workload), f"controlled-cutover.workloads.{workload}")
+        for language in ("python", "rust"):
+            result = obj(pair.get(language), f"controlled-cutover.workloads.{workload}.{language}")
+            raw = arr(result.get("raw"), f"controlled-cutover.workloads.{workload}.{language}.raw")
+            require(len(raw) == repeats,
+                    f"controlled-cutover.workloads.{workload}.{language}: raw sample count mismatch")
+            summary = obj(result.get("summary"), f"controlled-cutover.workloads.{workload}.{language}.summary")
+            require(summary.get("samples") == repeats,
+                    f"controlled-cutover.workloads.{workload}.{language}.summary.samples mismatch")
+    payload = fixture["total_file_bytes"]
+    for row in workloads["read"]["python"]["raw"] + workloads["read"]["rust"]["raw"]:
+        require(row.get("verified_payload_bytes") == payload,
+                "controlled-cutover: read sample did not cover complete fixture")
+    for row in workloads["transfer"]["python"]["raw"]:
+        require(row.get("payload_bytes") == payload, "controlled-cutover: Python transfer source payload mismatch")
+        require(row.get("receiver_payload_bytes") == payload,
+                "controlled-cutover: Python transfer receiver did not verify complete payload")
+        require(row.get("receiver_bad_md5") == 0, "controlled-cutover: Python transfer integrity failure")
+        require(row.get("receiver_packets") == row.get("chunks_sent"),
+                "controlled-cutover: Python transfer packet loss")
+        require(row.get("receiver_wire_bytes") == row.get("attempted_wire_bytes"),
+                "controlled-cutover: Python transfer wire-byte mismatch")
+    for row in workloads["transfer"]["rust"]["raw"]:
+        require(row.get("verified_payload_bytes") == payload,
+                "controlled-cutover: Rust transfer did not verify complete payload")
+        require(row.get("failed_sessions") == 0,
+                "controlled-cutover: Rust transfer reported failed sessions")
+    shutdown = obj(report.get("shutdown"), "controlled-cutover.shutdown")
+    for language in ("python", "rust"):
+        rows = arr(obj(shutdown.get(language), f"controlled-cutover.shutdown.{language}").get("raw"),
+                   f"controlled-cutover.shutdown.{language}.raw")
+        require(len(rows) == repeats, f"controlled-cutover.shutdown.{language}: raw sample count mismatch")
+
+def validate_production_release_trust(report, current):
+    env = obj(report.get("environment"), "production-release-trust.environment")
+    text_field(env, "deployment", "production-release-trust.environment")
+    signing = obj(report.get("signing"), "production-release-trust.signing")
+    text_field(signing, "production_identity", "production-release-trust.signing")
+    text_field(signing, "key_fingerprint", "production-release-trust.signing")
+    bool_field(signing, "synthetic", "production-release-trust.signing", False)
+    bool_field(signing, "signature_verified", "production-release-trust.signing")
+    release = obj(report.get("release"), "production-release-trust.release")
+    text_field(release, "origin", "production-release-trust.release")
+    sha256_field(release, "artifact_sha256", "production-release-trust.release")
+    exact_commit(release, "artifact_commit", "production-release-trust.release", current)
+    bool_field(release, "fetched_from_production_origin", "production-release-trust.release")
+    bool_field(release, "provenance_verified", "production-release-trust.release")
+    activation = obj(report.get("activation"), "production-release-trust.activation")
+    for key in ("staging_verified", "activation_performed", "health_verified",
+                "rollback_exercised", "rollback_succeeded", "post_rollback_health_verified"):
+        bool_field(activation, key, "production-release-trust.activation")
+
+def validate_gate_semantics(gate_id, report, current):
+    if gate_id == "current-ci":
+        validate_current_ci(report, current)
+    elif gate_id == "physical-hotspot":
+        validate_physical_hotspot(report)
+    elif gate_id == "physical-hotplug":
+        validate_physical_hotplug(report)
+    elif gate_id == "controlled-cutover":
+        validate_controlled_cutover(report, current)
+    elif gate_id == "production-release-trust":
+        validate_production_release_trust(report, current)
+    else:
+        raise RuntimeError(f"unknown acceptance gate {gate_id}")
+
 def validate_external_evidence(evidence_path: Path, current: str, gates: dict) -> None:
     contract = gates.get("evidence_contract", {})
     require(contract.get("hash_algorithm") == "sha256", "unsupported evidence hash contract")
@@ -52,6 +241,7 @@ def validate_external_evidence(evidence_path: Path, current: str, gates: dict) -
     report_limit = int(contract.get("max_report_bytes", 0))
     raw = read_bounded_regular(evidence_path, manifest_limit, "evidence manifest")
     evidence = load_json_bytes(raw, "evidence manifest")
+    require(isinstance(evidence, dict), "evidence manifest must be a JSON object")
     require(evidence.get("schema_version") == contract.get("schema_version"), "evidence schema mismatch")
     require(evidence.get("tested_commit") == current, "Evidence must match the current checked-out revision")
     proofs = evidence.get("gates")
@@ -68,7 +258,7 @@ def validate_external_evidence(evidence_path: Path, current: str, gates: dict) -
         require(proof.get("gate_id") == gate_id, f"{gate_id}: gate ID mismatch")
         require(proof.get("result") == "pass", f"{gate_id}: gate did not pass")
         digest = proof.get("report_sha256")
-        require(isinstance(digest, str) and re.fullmatch(r"[0-9a-fA-F]{64}", digest), f"{gate_id}: invalid report SHA-256")
+        require(isinstance(digest, str) and HEX64.fullmatch(digest), f"{gate_id}: invalid report SHA-256")
         report_path = resolve_report(evidence_path, proof.get("report"))
         report_raw = read_bounded_regular(report_path, report_limit, f"{gate_id} report")
         actual = hashlib.sha256(report_raw).hexdigest()
@@ -85,12 +275,21 @@ def validate_external_evidence(evidence_path: Path, current: str, gates: dict) -
         require(isinstance(performer, str) and performer.strip(), f"{gate_id}: performed_by required")
         require(isinstance(reviewer, str) and reviewer.strip(), f"{gate_id}: reviewed_by required")
         require(reviewer.strip().casefold() != performer.strip().casefold(), f"{gate_id}: independent reviewer required")
+        require(proof.get("reviewed_report_sha256", "").lower() == digest.lower(),
+                f"{gate_id}: reviewer binding must name exact report digest")
+        require(proof.get("reviewed_commit") == current,
+                f"{gate_id}: reviewer binding must name exact tested commit")
+        require(proof.get("review_decision") == "approve",
+                f"{gate_id}: reviewer decision must be approve")
+        require(isinstance(proof.get("review_reference"), str) and proof["review_reference"].strip(),
+                f"{gate_id}: immutable external review reference required")
+        validate_gate_semantics(gate_id, report, current)
 
 def main() -> None:
     data = json.loads((ROOT / "docs/migration/parity.json").read_text())
     gates = json.loads((ROOT / data["acceptance_gate_manifest"]).read_text())
-    require(data["source_commit"] == "aa7f3720c42856f0e1d18742f78fba156227ee79", "wrong Python source commit")
-    require(data["source_blob"] == "54bf6226eb80d1ef6c4f6087fb02579141ab134f", "wrong Python source blob")
+    require(data["source_commit"] == SOURCE_COMMIT, "wrong Python source commit")
+    require(data["source_blob"] == SOURCE_BLOB, "wrong Python source blob")
     seen = set()
     for row in data["capabilities"]:
         require(row["id"] not in seen, f"duplicate capability {row['id']}")

@@ -345,6 +345,23 @@ without following symlinks and verifies the digest and bindings. A handwritten
 manifest that merely says `pass`, a stale commit, a missing report, digest mismatch,
 gate-ID mismatch or self-review MUST fail the complete gate.
 
+Gate reports are not generic pass envelopes. The verifier enforces gate-specific
+semantics before full replacement can become true: current-ci must bind both native
+artifacts and their BUILD-INFO/checksums/self-tests to the exact commit; hotspot
+must identify real non-virtual Wi-Fi hardware and prove apply/interruption/rollback;
+hotplug must identify original and replacement physical devices and prove old
+checkpoint rejection at the same mount path; controlled-cutover must contain raw
+same-fixture Python/Rust samples with complete transfer integrity; release trust
+must identify a non-synthetic production signer/origin and prove staging, activation,
+health, rollback and post-rollback health. A minimal JSON object that only says pass
+is invalid even when its digest is correct.
+
+Reviewer metadata is also bound to the exact report SHA-256 and tested commit, with
+an approve decision and immutable external review reference. The local verifier
+checks that binding and performer/reviewer separation; the external acceptance
+process remains responsible for authenticating that reviewer identity and for
+confirming that claimed physical observations actually occurred.
+
 ## 21. Implementation records
 
 Historical first-slice implementation notes are in docs/history/architecture-v1.md.
