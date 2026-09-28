@@ -377,7 +377,7 @@ def fetch_github_review(reference: str) -> dict:
     return review
 
 
-def validate_review_binding(def validate_review_binding(gate_id, proof, report, digest, current, review_scope, review_fetcher=None):
+def validate_review_binding(gate_id, proof, report, digest, current, review_scope, review_fetcher=None):
     performer = text_field(report, "performed_by", f"{gate_id} report")
     actor = text_field(report, "performed_actor", f"{gate_id} report")
     reviewer = text_field(proof, "reviewed_by", f"{gate_id} evidence")
