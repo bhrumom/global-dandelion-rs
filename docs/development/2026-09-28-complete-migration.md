@@ -47,3 +47,12 @@ architecture/expiry gates, bounded HTTPS or local input, SHA-256/size validation
 atomic versioned staging and explicit no-activation semantics. Shared WriteGuard
 moved into core for all writers; state re-exports it without a concrete platform
 dependency. New native offline CLI trust tests use ephemeral signing keys in CI.
+
+Hotspot increment: plan/apply/status/stop through a whitelisted ProcessRunner port,
+private password-file, durable UUID ownership journal, capability checks and scoped
+rollback. CLI consent and fault-injected lifecycle tests added. Hardware gate open.
+
+Dependency audit of the updater found the maintained public-root data's
+CDLA-Permissive-2.0 license. Reviewed the published license and added a package-
+specific exception only for webpki-root-certs, with original license text and
+license inventory bundled into every artifact. No advisory/bans gate disabled.

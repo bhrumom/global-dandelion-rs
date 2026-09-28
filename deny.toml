@@ -10,6 +10,12 @@ allow = ["Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.
 confidence-threshold = 0.8
 private = { ignore = true }
 
+# reqwest's maintained public-root bundle is data under CDLA Permissive 2.0.
+# Distribution includes original crate license files via license_report.py.
+[[licenses.exceptions]]
+name = "webpki-root-certs"
+allow = ["CDLA-Permissive-2.0"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"

@@ -33,6 +33,7 @@ fn load(cli: &Cli, overrides: Overrides) -> Result<dandelion_config::ValidatedCo
 pub fn execute(cli: &Cli) -> Result<u8> {
     match &cli.command {
         Command::Receive(args) => receive(args),
+        Command::Hotspot { command } => hotspot(command),
         Command::Update { command } => update(command),
         Command::Run(args) => {
             let cfg = load(cli, args.overrides())?;
@@ -320,6 +321,69 @@ fn update(command: &crate::cli::UpdateCommand) -> Result<u8> {
                 )?
             };
             output::json(&staged)?;
+        }
+    }
+    Ok(0)
+}
+
+fn hotspot(command: &crate::cli::HotspotCommand) -> Result<u8> {
+    use crate::cli::HotspotCommand;
+    let convert = |s: &crate::cli::HotspotSettings| dandelion_hotspot::Settings {
+        interface: s.interface.clone(),
+        ssid: s.ssid.clone(),
+        band: s.band.clone(),
+    };
+    match command {
+        HotspotCommand::Plan(settings) => {
+            output::json(&dandelion_hotspot::plan(convert(settings))?)?
+        }
+        HotspotCommand::Status { journal_directory } => {
+            output::json(&dandelion_hotspot::inspect(journal_directory)?)?
+        }
+        HotspotCommand::Apply {
+            settings,
+            journal_directory,
+            password_file,
+            confirm,
+        } => {
+            if !confirm {
+                return Err(Error::Config("hotspot apply changes network state; inspect plan and pass --confirm explicitly".into()));
+            }
+            let password = dandelion_platform_linux::read_credential(password_file, true)?;
+            let password = std::str::from_utf8(&password)
+                .map_err(|_| Error::Config("invalid password file encoding".into()))?
+                .trim_end_matches(['\r', '\n']);
+            let journal = execution::drive(Duration::from_secs(30), |cancel| async move {
+                dandelion_hotspot::apply(
+                    &dandelion_platform_linux::process::NativeProcess,
+                    StorageGuard,
+                    journal_directory,
+                    convert(settings),
+                    password,
+                    &cancel,
+                )
+                .await
+            })?;
+            output::json(&journal)?;
+        }
+        HotspotCommand::Stop {
+            journal_directory,
+            confirm,
+        } => {
+            if !confirm {
+                return Err(Error::Config(
+                    "hotspot stop requires explicit --confirm".into(),
+                ));
+            }
+            let journal = execution::drive(Duration::from_secs(30), |_cancel| async move {
+                dandelion_hotspot::stop(
+                    &dandelion_platform_linux::process::NativeProcess,
+                    StorageGuard,
+                    journal_directory,
+                )
+                .await
+            })?;
+            output::json(&journal)?;
         }
     }
     Ok(0)

@@ -69,12 +69,13 @@ jobs:
           mkdir -p dist
           cp target/release/dandelion dist/
           cp Cargo.lock dist/
+          python3 scripts/license_report.py
           { printf 'git_sha=%s\n' "$GITHUB_SHA"; rustc -Vv; cargo -V; } > dist/BUILD-INFO.txt
           cp acceptance-${{ matrix.target }}.json tls-acceptance-${{ matrix.target }}.json update-acceptance-${{ matrix.target }}.json dist/
           if [ "${{ matrix.target }}" = x86_64-unknown-linux-gnu ]; then
             python3 scripts/benchmark_report.py > dist/packet-benchmark.json
           fi
-          (cd dist && sha256sum dandelion Cargo.lock BUILD-INFO.txt acceptance-*.json tls-acceptance-*.json update-acceptance-*.json > SHA256SUMS)
+          (cd dist && sha256sum dandelion Cargo.lock BUILD-INFO.txt THIRD-PARTY-NOTICES.txt license-inventory.json acceptance-*.json tls-acceptance-*.json update-acceptance-*.json > SHA256SUMS)
           if [ -f dist/packet-benchmark.json ]; then
             (cd dist && sha256sum packet-benchmark.json >> SHA256SUMS)
           fi

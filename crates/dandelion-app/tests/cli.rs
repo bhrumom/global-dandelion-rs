@@ -184,3 +184,37 @@ fn legacy_import_and_invalid_input_preservation() {
     assert_eq!(value["ledger"]["charged_bytes"], 1234);
     assert!(legacy.exists());
 }
+
+#[test]
+fn hotspot_plan_is_read_only_and_apply_requires_explicit_consent() {
+    let plan = cli(&[
+        "hotspot",
+        "plan",
+        "--interface",
+        "wlan0",
+        "--ssid",
+        "Example",
+    ]);
+    assert!(
+        plan.status.success(),
+        "{}",
+        String::from_utf8_lossy(&plan.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&plan.stdout).unwrap();
+    assert_eq!(value["password_on_argv"], false);
+    assert_eq!(value["regulatory_changes"], false);
+    let d = tempfile::tempdir().unwrap();
+    let journal = d.path().join("not-created");
+    let refused = cli(&[
+        "hotspot",
+        "apply",
+        "--interface",
+        "wlan0",
+        "--journal-directory",
+        journal.to_str().unwrap(),
+        "--password-file",
+        "not-read",
+    ]);
+    assert_eq!(refused.status.code(), Some(2));
+    assert!(!journal.exists());
+}

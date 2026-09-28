@@ -36,6 +36,11 @@ pub enum Command {
     Run(Run),
     /// Receive and verify TLS 1.3 data from authenticated clients (memory receipts).
     Receive(Receive),
+    /// Explicit, journaled NetworkManager AP lifecycle; never runs during transfers.
+    Hotspot {
+        #[command(subcommand)]
+        command: HotspotCommand,
+    },
     /// Verify signed release metadata or stage a verified artifact without activation.
     Update {
         #[command(subcommand)]
@@ -216,5 +221,39 @@ pub enum UpdateCommand {
         artifact: Option<PathBuf>,
         #[arg(long)]
         allowed_host: Option<String>,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+pub struct HotspotSettings {
+    #[arg(long)]
+    pub interface: String,
+    #[arg(long, default_value = "Global-Dandelion")]
+    pub ssid: String,
+    #[arg(long, default_value = "a")]
+    pub band: String,
+}
+#[derive(Debug, Subcommand)]
+pub enum HotspotCommand {
+    Plan(HotspotSettings),
+    Apply {
+        #[command(flatten)]
+        settings: HotspotSettings,
+        #[arg(long)]
+        journal_directory: PathBuf,
+        #[arg(long)]
+        password_file: PathBuf,
+        #[arg(long)]
+        confirm: bool,
+    },
+    Status {
+        #[arg(long)]
+        journal_directory: PathBuf,
+    },
+    Stop {
+        #[arg(long)]
+        journal_directory: PathBuf,
+        #[arg(long)]
+        confirm: bool,
     },
 }

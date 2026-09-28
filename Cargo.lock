@@ -405,6 +405,7 @@ dependencies = [
  "clap_complete",
  "dandelion-config",
  "dandelion-core",
+ "dandelion-hotspot",
  "dandelion-pacing",
  "dandelion-packet",
  "dandelion-platform-linux",
@@ -444,6 +445,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dandelion-hotspot"
+version = "0.1.0"
+dependencies = [
+ "dandelion-core",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "dandelion-pacing"
 version = "0.1.0"
 dependencies = [
@@ -470,6 +484,7 @@ dependencies = [
  "rustix",
  "serde",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -1921,9 +1936,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.26.6"
+version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9cc2678c2cdd569ef8215e2afd7954ada2ae20b4fdd2c5fe6139a3b02d105db"
+checksum = "b0c85f2c3ef0b1cd58b36682f4b17aaa995f0e5db534d85692b4903abce21f67"
 dependencies = [
  "rustls",
  "tokio",
