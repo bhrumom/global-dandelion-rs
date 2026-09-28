@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "full_replacement_verified": false,
   "required_gates": [
     {
@@ -23,5 +23,27 @@
       "requirement": "Operator-provisioned trusted signing key, actual signed release origin/artifacts, staged activation and rollback in the deployment environment."
     }
   ],
-  "evidence_delivery": "Pass an independently reviewed external evidence manifest to scripts/check_parity.py --require-complete --evidence FILE. Never invent missing evidence or weaken this gate."
+  "evidence_delivery": "Pass the independently reviewed external evidence manifest to scripts/check_parity.py --require-complete --evidence FILE. A manifest-only pass is insufficient; every gate report is re-read and digest/bindings/reviewer independence are verified.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "hash_algorithm": "sha256",
+    "max_manifest_bytes": 1048576,
+    "max_report_bytes": 16777216,
+    "required_gate_fields": [
+      "gate_id",
+      "result",
+      "report",
+      "report_sha256",
+      "reviewed_by"
+    ],
+    "required_report_fields": [
+      "schema_version",
+      "gate_id",
+      "tested_commit",
+      "result",
+      "performed_by"
+    ],
+    "reviewer_rule": "reviewed_by must be non-empty and differ case-insensitively from report.performed_by",
+    "report_rule": "report must be a regular file opened without following symlinks; its SHA-256, gate_id, tested_commit and pass result must verify"
+  }
 }

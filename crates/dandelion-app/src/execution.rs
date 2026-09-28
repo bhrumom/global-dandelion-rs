@@ -4,7 +4,7 @@ use dandelion_config::{Config, ValidatedConfig};
 use dandelion_core::{Error, Result, RunStatus, Snapshot};
 use std::{
     future::Future,
-    path::Path,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 use tokio_util::sync::CancellationToken;
@@ -14,6 +14,57 @@ impl dandelion_state::WriteGuard for StorageGuard {
     fn check(&self, directory: &Path, additional_peak_bytes: u64) -> Result<()> {
         dandelion_platform_linux::disk_space(directory)?.check(additional_peak_bytes)
     }
+}
+
+fn resume_field(hasher: &mut blake3::Hasher, bytes: &[u8]) -> Result<()> {
+    let len = u64::try_from(bytes.len())
+        .map_err(|_| Error::Config("resume identity field is too large".into()))?;
+    hasher.update(&len.to_be_bytes());
+    hasher.update(bytes);
+    Ok(())
+}
+
+fn hash_resume_mount_binding(
+    hasher: &mut blake3::Hasher,
+    root: &Path,
+    mount: &dandelion_platform_linux::inventory::Mount,
+) -> Result<()> {
+    resume_field(hasher, root.as_os_str().as_encoded_bytes())?;
+    hasher.update(&mount.id.to_be_bytes());
+    hasher.update(&mount.parent_id.to_be_bytes());
+    resume_field(hasher, mount.device.as_bytes())?;
+    resume_field(hasher, mount.root.as_os_str().as_encoded_bytes())?;
+    resume_field(hasher, mount.mountpoint.as_os_str().as_encoded_bytes())?;
+    resume_field(hasher, mount.filesystem.as_bytes())?;
+    resume_field(hasher, mount.source.as_os_str().as_encoded_bytes())?;
+    resume_field(hasher, mount.options.as_bytes())
+}
+
+fn extend_resume_mount_scope(
+    hasher: &mut blake3::Hasher,
+    roots: &[PathBuf],
+    table: &[dandelion_platform_linux::inventory::Mount],
+) -> Result<()> {
+    let mut canonical = roots
+        .iter()
+        .map(std::fs::canonicalize)
+        .collect::<std::io::Result<Vec<_>>>()?;
+    canonical.sort();
+    canonical.dedup();
+    if canonical.is_empty() {
+        return Err(Error::Config("resume requires at least one mounted source".into()));
+    }
+    for root in canonical {
+        if root.parent().is_none() {
+            return Err(Error::Config(
+                "filesystem root is not a resumable data source".into(),
+            ));
+        }
+        let mount =
+            dandelion_platform_linux::inventory::source_mount_identity(table, &root)?;
+        hash_resume_mount_binding(hasher, &root, &mount)?;
+    }
+    Ok(())
 }
 #[derive(Clone, Debug)]
 pub struct RunOptions {
@@ -83,10 +134,25 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
             "file resume requires enabled state, one pass and a transfer mode".into(),
         ));
     }
+    let resume_mount_table = if options.resume {
+        let table = dandelion_platform_linux::inventory::mounts()?;
+        if !config.scanner.allowed_mount_prefixes.is_empty() {
+            config.scanner.roots.extend(
+                dandelion_platform_linux::inventory::authorized_mount_roots(
+                    &table,
+                    &config.scanner.allowed_mount_prefixes,
+                )?,
+            );
+            config.scanner.allowed_mount_prefixes.clear();
+        }
+        Some(table)
+    } else {
+        None
+    };
     let transport_policy =
         serde_json::to_vec(&config.transport).map_err(|e| Error::Config(e.to_string()))?;
     let mut resume_scope = blake3::Hasher::new();
-    resume_scope.update(b"GDAN/file-resume/v1");
+    resume_scope.update(b"GDAN/file-resume/v2");
     resume_scope.update(&transport_policy);
     let tls_config = if matches!(config.transport.mode, dandelion_config::Mode::Tls)
         && !options.surface
@@ -113,6 +179,9 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
     } else {
         None
     };
+    if let Some(table) = &resume_mount_table {
+        extend_resume_mount_scope(&mut resume_scope, &config.scanner.roots, table)?;
+    }
     let mut state = if config.state.enabled && !options.surface {
         Some(dandelion_state::Store::open(
             &config.state.directory,
@@ -335,4 +404,38 @@ async fn service(
     total.elapsed_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
     observer.send_replace(total.clone());
     Ok(total)
+}
+
+
+#[cfg(test)]
+mod resume_scope_tests {
+    use super::*;
+
+    fn mount(id: u64, device: &str, source: &str) -> dandelion_platform_linux::inventory::Mount {
+        dandelion_platform_linux::inventory::Mount {
+            id,
+            parent_id: 1,
+            device: device.into(),
+            root: "/".into(),
+            mountpoint: "/media/source".into(),
+            filesystem: "ext4".into(),
+            source: source.into(),
+            options: "rw,relatime".into(),
+        }
+    }
+
+    fn digest(binding: &dandelion_platform_linux::inventory::Mount) -> String {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"GDAN/file-resume/v2");
+        hash_resume_mount_binding(&mut hasher, Path::new("/media/source/data"), binding).unwrap();
+        hasher.finalize().to_hex().to_string()
+    }
+
+    #[test]
+    fn remount_or_replacement_invalidates_resume_scope() {
+        let original = mount(41, "8:17", "/dev/sdb1");
+        assert_eq!(digest(&original), digest(&original));
+        assert_ne!(digest(&original), digest(&mount(42, "8:17", "/dev/sdb1")));
+        assert_ne!(digest(&original), digest(&mount(41, "8:33", "/dev/sdc1")));
+    }
 }

@@ -578,11 +578,13 @@
       "destination": "dandelion-state",
       "classification": "redesigned",
       "status": "implemented",
-      "reason": "Single-writer durable checksummed ledger, conservative leases, actual legacy schema import and scoped file-level resume. No automatic monthly debt reset or byte-level exactly-once claim.",
+      "reason": "Single-writer durable checksummed ledger, conservative leases, actual legacy schema import and GDAN/file-resume/v2 scoped whole-file resume bound to exact Linux source-mount identity. No automatic monthly debt reset or byte-level exactly-once claim.",
       "evidence": [
         "crates/dandelion-state/src/lib.rs",
         "crates/dandelion-app/tests/cli.rs",
-        "docs/adr/0007-bounded-file-resume.md"
+        "docs/adr/0007-bounded-file-resume.md",
+        "crates/dandelion-app/src/execution.rs",
+        "crates/dandelion-platform-linux/src/inventory.rs"
       ],
       "verification_scope": "current-ci"
     },

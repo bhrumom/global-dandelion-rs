@@ -43,4 +43,12 @@ for manifest in sorted((ROOT / "crates").glob("*/Cargo.toml")):
                           r"\bthread::spawn\s*\(", r"\btokio::spawn\s*\("]:
             assert not re.search(forbidden, production), f"{source}: prohibited {forbidden}"
 assert found == set(ALLOWED), f"missing packages: {set(ALLOWED) - found}"
+spec = (ROOT / "docs/specs/global-dandelion-rust-architecture.md").read_text()
+crate_block = re.search(r"```text\ncrates/\n(?P<body>.*?)\n```", spec, re.S)
+assert crate_block, "Spec crate architecture block missing"
+documented = set(re.findall(r"^\s{2}(dandelion-[a-z0-9-]+)/", crate_block.group("body"), re.M))
+assert documented == found, (
+    f"Spec/code architecture drift: undocumented={found - documented}, "
+    f"fictional={documented - found}"
+)
 print(json.dumps({"architecture": "pass", "components": sorted(found)}))

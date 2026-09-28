@@ -95,3 +95,28 @@ exclusions from physical hardware, production trust and full cutover acceptance.
 The complete gate requires external reviewed exact-revision evidence and cannot be
 satisfied merely by a zero-pending code list. New docs/config/CLI changes still
 require a fresh current-revision CI run.
+
+
+## Resume scope v2 and evidence-contract closure
+
+A post-migration audit found two claims that were not yet true in the branch: the
+Spec still named a nonexistent dandelion-telemetry crate, and production resume
+still used GDAN/file-resume/v1 without Linux mount identity. The full-replacement
+checker also trusted manifest fields without re-reading and hashing the gate report.
+
+This change closes those gaps without claiming external acceptance. Telemetry/rate
+models remain in dandelion-core and dandelion-tui remains an observer; the static
+architecture gate now compares the Spec crate block with the actual workspace.
+C16 freezes allowed-mount discovery for a finite resume pass and hashes canonical
+source roots plus the exact visible Linux mount generation into
+GDAN/file-resume/v2. Unit tests prove remount/device replacement changes identity.
+
+The external evidence contract is now machine-checked: exact commit, exact gate ID,
+bounded regular report file, SHA-256, pass result and reviewer independence from the
+report performer. CI includes synthetic positive and tamper/self-review/missing-
+report/wrong-gate negative tests. These synthetic tests verify the checker only and
+are never accepted as real hotspot/hotplug/cutover/release-trust evidence.
+
+The commit containing this record still requires exact-revision CI. Physical Wi-Fi
+hotspot, physical hotplug, controlled cutover and production release trust remain
+external gates and must not be marked passed without independently reviewed reports.

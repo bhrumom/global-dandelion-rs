@@ -87,7 +87,7 @@ CI must never send workload data to arbitrary public hosts or mutate host networ
 ```text
 crates/
   dandelion-app/             CLI and composition root; Supervisor
-  dandelion-core/            values, policies, capability contracts; no Tokio/Linux
+  dandelion-core/            values, policies, capability contracts, pure telemetry/rate models; no Tokio/Linux
   dandelion-config/          deserialization, merge, validation
   dandelion-scanner/         traversal, bounded readers; source capability only
   dandelion-packet/          deterministic wire codec and compatibility codecs
@@ -95,10 +95,10 @@ crates/
   dandelion-transport/       owned sockets, authorization, verified delivery
   dandelion-state/           versioned durable state; no UI/transport ownership
   dandelion-platform-linux/  filesystem/mount/interface/process capabilities
-  dandelion-telemetry/       snapshot aggregation and subscriber boundaries
-  dandelion-tui/             optional observer; never owns transfer state
+  dandelion-tui/             optional observer over core snapshots; never owns transfer state
   dandelion-hotspot/         isolated lifecycle capability
   dandelion-updater/         trust verification and staging only
+  dandelion-compat/          explicit bounded legacy adapters; never authorization policy
 ```
 
 Create a package only with an implemented responsibility. CLI entrypoints must
@@ -228,6 +228,15 @@ replay cannot become duplicate durable effects. Crash tests distinguish reserved
 sent, acknowledged and committed states. Whole-file resume may be used initially
 only when honestly documented; do not call byte-level restart complete without tests.
 
+C16 uses `GDAN/file-resume/v2`. Before a resume pass, any allowed-mount discovery is
+frozen to the exact currently mounted roots. The scope binds every canonical source
+root to its Linux mount ID, parent ID, device, mount root, mountpoint, filesystem,
+source and mount options, in addition to target policy and trust material. Unmount,
+remount or device replacement therefore invalidates old checkpoints conservatively
+instead of applying old file completion to a new object mounted at the same path.
+Per-file keys still bind opened-file size/device/inode/mtime/ctime. Hardware hotplug
+proof remains a separate real-device gate.
+
 ## 13. Telemetry and terminal lifecycle
 
 Expose phase, component health, source availability, queue/backlog, completed files,
@@ -324,6 +333,17 @@ restart/cancellation/corruption tests, appropriate real-device hardware proof,
 controlled baseline report, versioned releasable artifacts and operational docs.
 A complete gate must fail while required pending rows/hardware proofs remain.
 A foundation gate may pass independently but must not be named full completion.
+
+External acceptance evidence is fail-closed. The evidence manifest must bind the
+exact tested commit and contain exactly the five required gate IDs. Each gate entry
+must name the same gate ID, point to a bounded regular JSON report, provide that
+report's SHA-256, record `result = pass`, and name an independent reviewer. The
+report itself must bind the same gate ID and exact commit, record `result = pass`,
+and identify the performer. `reviewed_by` must differ from `performed_by`.
+`scripts/check_parity.py --require-complete --evidence FILE` re-reads every report
+without following symlinks and verifies the digest and bindings. A handwritten
+manifest that merely says `pass`, a stale commit, a missing report, digest mismatch,
+gate-ID mismatch or self-review MUST fail the complete gate.
 
 ## 21. Implementation records
 

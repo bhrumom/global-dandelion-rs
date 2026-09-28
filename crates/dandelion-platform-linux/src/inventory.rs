@@ -138,6 +138,44 @@ pub fn parse_mountinfo(text: &str) -> Result<Vec<Mount>> {
 pub fn mounts() -> Result<Vec<Mount>> {
     parse_mountinfo(&bounded_text(Path::new("/proc/self/mountinfo"), MAX_TABLE)?)
 }
+
+/// Return the exact visible Linux mount identity covering a canonical source root.
+/// Mount IDs are intentionally part of resume identity: unmount/remount is treated
+/// as a new source generation even when a device is mounted at the same path.
+pub fn source_mount_identity(table: &[Mount], source_root: &Path) -> Result<Mount> {
+    if !source_root.is_absolute() || source_root.parent().is_none() {
+        return Err(Error::Config(
+            "resume source root must be an absolute non-root path".into(),
+        ));
+    }
+    let mut best: Option<&Mount> = None;
+    let mut best_depth = 0usize;
+    let mut ambiguous = false;
+    for mount in table.iter().filter(|m| source_root.starts_with(&m.mountpoint)) {
+        if !mount.mountpoint.is_absolute() {
+            continue;
+        }
+        let depth = mount.mountpoint.components().count();
+        if best.is_none() || depth > best_depth {
+            best = Some(mount);
+            best_depth = depth;
+            ambiguous = false;
+        } else if depth == best_depth {
+            ambiguous = true;
+        }
+    }
+    if ambiguous {
+        return Err(Error::Platform(
+            "ambiguous stacked mount identity for resume source".into(),
+        ));
+    }
+    best.cloned().ok_or_else(|| {
+        Error::Platform(format!(
+            "no mount identity covers resume source {}",
+            source_root.display()
+        ))
+    })
+}
 pub fn diff_mounts(before: &[Mount], after: &[Mount]) -> MountChanges {
     let key = |m: &Mount| {
         (
@@ -307,6 +345,21 @@ mod tests {
             1
         );
         assert!(authorized_mount_roots(&m, &["/".into()]).is_err());
+    }
+    #[test]
+    fn resume_identity_changes_on_remount_or_replacement() {
+        let root = Path::new("/media/My Disk/data");
+        let original = source_mount_identity(&parse_mountinfo(M).unwrap(), root).unwrap();
+        let remounted =
+            source_mount_identity(&parse_mountinfo(&M.replace("36 25", "37 25")).unwrap(), root)
+                .unwrap();
+        let replaced =
+            source_mount_identity(&parse_mountinfo(&M.replace("8:1", "8:2")).unwrap(), root)
+                .unwrap();
+        assert_ne!(original.id, remounted.id);
+        assert_ne!(original, remounted);
+        assert_ne!(original, replaced);
+        assert!(source_mount_identity(&parse_mountinfo(M).unwrap(), Path::new("/")).is_err());
     }
     #[test]
     fn connections_and_neighbours_are_passive_parsers() {
