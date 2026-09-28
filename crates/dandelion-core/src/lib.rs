@@ -5,6 +5,7 @@ pub mod process;
 pub mod schedule;
 pub mod storage;
 pub mod targets;
+pub mod telemetry;
 
 use serde::{Deserialize, Serialize};
 use std::{io, path::PathBuf};

@@ -139,6 +139,11 @@ impl Run {
 
 #[derive(Debug, Subcommand)]
 pub enum PlatformCommand {
+    /// Show local clock metadata; optionally compare to configured authenticated peers.
+    Time {
+        #[arg(long)]
+        peer: bool,
+    },
     Inspect,
     Mounts,
     Watch {

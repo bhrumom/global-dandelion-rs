@@ -46,12 +46,18 @@ pub fn render(snapshot: &Snapshot, elapsed: Duration) -> String {
 pub fn observe(receiver: watch::Receiver<Snapshot>, cancel: CancellationToken) -> Result<()> {
     let mut screen = Screen::enter(io::stderr())?;
     let start = Instant::now();
+    let mut send_rate = dandelion_core::telemetry::RateEstimator::default();
+    let mut verified_rate = dandelion_core::telemetry::RateEstimator::default();
     while !cancel.is_cancelled() {
         let value = receiver.borrow().clone();
+        let elapsed = start.elapsed();
+        let current_send = send_rate.sample(value.accepted_wire_bytes, elapsed);
+        let current_verified = verified_rate.sample(value.verified_payload_bytes, elapsed);
         screen.writer.write_all(b"\x1b[H\x1b[2J")?;
         screen
             .writer
             .write_all(render(&value, start.elapsed()).as_bytes())?;
+        screen.writer.write_all(format!("Current accepted rate: {current_send} B/s\nCurrent verified rate: {current_verified} B/s\n").as_bytes())?;
         screen.writer.flush()?;
         // Explicit four-Hz UI refresh, wholly independent of data-plane pacing.
         std::thread::sleep(Duration::from_millis(250));

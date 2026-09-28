@@ -82,11 +82,68 @@ pub fn server_config(ca: &[u8], cert: &[u8], key: &[u8]) -> Result<Arc<ServerCon
     Ok(Arc::new(cfg))
 }
 
+#[derive(Debug, Serialize)]
+pub struct PeerClock {
+    pub authenticated: bool,
+    pub peer_unix_ms: u64,
+    pub local_unix_ms: u64,
+    pub estimated_offset_ms: i64,
+    pub round_trip_ms: u64,
+    pub uncertainty_ms: u64,
+}
+fn unix_ms() -> Result<u64> {
+    Ok(std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| Error::Task(e.to_string()))?
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64)
+}
+enum Incoming {
+    Complete,
+    ClockQuery,
+    Payload(u64),
+}
 pub struct Peers {
     streams: Vec<tokio_rustls::client::TlsStream<Metered<TcpStream>>>,
     timeout: Duration,
 }
 impl Peers {
+    /// Read-only authenticated peer wall-clock comparison, not a UTC authority.
+    pub async fn clocks(&mut self, cancel: &CancellationToken) -> Result<Vec<PeerClock>> {
+        let mut results = Vec::with_capacity(self.streams.len());
+        for stream in &mut self.streams {
+            let local = unix_ms()?;
+            let started = std::time::Instant::now();
+            let query = async {
+                stream.write_u32(1).await.map_err(classify)?;
+                stream.write_u8(1).await.map_err(classify)?;
+                stream.flush().await.map_err(classify)?;
+                let mut tag = [0; 4];
+                stream.read_exact(&mut tag).await.map_err(classify)?;
+                if &tag != b"GTIM" {
+                    return Err(Error::Protocol("peer clock receipt mismatch"));
+                }
+                stream.read_u64().await.map_err(classify)
+            };
+            let peer = tokio::select! {biased;
+                _=cancel.cancelled()=>return Err(Error::Cancelled),
+                result=tokio::time::timeout(self.timeout,query)=>result.map_err(|_|Error::VerifierTimeout)??,
+            };
+            let elapsed = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+            let midpoint = u128::from(local) + u128::from(elapsed) / 2;
+            let offset = (i128::from(peer) - midpoint.min(i128::MAX as u128) as i128)
+                .clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64;
+            results.push(PeerClock {
+                authenticated: true,
+                peer_unix_ms: peer,
+                local_unix_ms: local,
+                estimated_offset_ms: offset,
+                round_trip_ms: elapsed,
+                uncertainty_ms: elapsed.div_ceil(2).saturating_add(1),
+            });
+        }
+        Ok(results)
+    }
     pub async fn connect(
         peers: &[AuthorizedPeer],
         config: Arc<ClientConfig>,
@@ -265,16 +322,22 @@ pub async fn serve(
                             stream.read_exact(&mut header[1..]).await.map_err(classify)?;let len=u32::from_be_bytes(header) as usize;
                             if len==0 {
                                 stream.write_all(b"GDON").await.map_err(classify)?;
-                                stream.flush().await.map_err(classify)?;return Ok(None);
+                                stream.flush().await.map_err(classify)?;return Ok(Incoming::Complete);
                             }
 
+                            if len==1 {
+                                if stream.read_u8().await.map_err(classify)?!=1{return Err(Error::Protocol("unknown peer control request"));}
+                                stream.write_all(b"GTIM").await.map_err(classify)?;
+                                stream.write_u64(unix_ms()?).await.map_err(classify)?;
+                                stream.flush().await.map_err(classify)?;return Ok(Incoming::ClockQuery);
+                            }
                             if !(dandelion_core::HEADER_BYTES..=MAX_DATAGRAM_BYTES).contains(&len){return Err(Error::Protocol("TLS frame length invalid"));}
                             stream.read_exact(&mut buffer[..len]).await.map_err(classify)?;let frame=dandelion_packet::decode(&buffer[..len])?;
                             let payload=frame.payload.len() as u64;let digest=blake3::hash(&buffer[..len]);
                             stream.write_all(b"GACK").await.map_err(classify)?;stream.write_all(digest.as_bytes()).await.map_err(classify)?;stream.flush().await.map_err(classify)?;
-                            Ok(Some(payload))
+                            Ok(Incoming::Payload(payload))
                         };
-                        match tokio::time::timeout(timeout,packet).await.map_err(|_|Error::VerifierTimeout)??{Some(n)=>{frames+=1;bytes+=n;},None=>break,}
+                        match tokio::time::timeout(timeout,packet).await.map_err(|_|Error::VerifierTimeout)??{Incoming::Payload(n)=>{frames+=1;bytes+=n;},Incoming::Complete=>break,Incoming::ClockQuery=>{},}
                     }Ok((frames,bytes))
                 });
             }

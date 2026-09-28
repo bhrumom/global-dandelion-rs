@@ -76,3 +76,7 @@ tempfile directories default to umask-filtered 0777, while recovery correctly
 requires a private directory. Set 0700 explicitly at creation for link workspaces
 and update staging bundles; keep the strict recovery check, and improve test error
 reporting. No existing user directory permissions are changed.
+
+Clock/telemetry increment: local metadata and optional authenticated peer clock
+comparison, metered and durable-budgeted, with no host-clock mutation or UTC accuracy
+claim. Added monotonic live rate estimation and actual mTLS clock-fixture acceptance.

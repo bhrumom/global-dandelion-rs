@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory(prefix="dandelion-tls-test-") as directory:
     source=root/"source";source.mkdir()
     (source/"fixture").write_bytes(bytes(range(251))*53)
     payload=(source/"fixture").read_bytes()
-    for case in ["success","wrong-server-name","untrusted-client","budget"]:
+    for case in ["success","clock","wrong-server-name","untrusted-client","budget"]:
         receiver=subprocess.Popen([binary,"receive","--bind","127.0.0.1:0","--once","--json",
             "--ca-file",str(root/"ca.pem"),"--certificate-file",str(root/"server.pem"),
             "--private-key-file",str(root/"server.key"),"--timeout-ms","3000"],env=env,
@@ -79,10 +79,18 @@ server_name = "{name}"
 class = "private"
 authorized = true
 """)
-            client=subprocess.run([binary,"--config",str(config),"run","--json"],env=env,capture_output=True,text=True,timeout=10)
+            client=subprocess.run([binary,"--config",str(config),*(["platform","time","--peer"] if case=="clock" else ["run"]),"--json"],env=env,capture_output=True,text=True,timeout=10)
             stdout,stderr=receiver.communicate(timeout=6)
             report=json.loads(stdout.strip())
-            if case=="success":
+            if case=="clock":
+                assert client.returncode==0,client.stderr
+                clocks=json.loads(client.stdout)
+                assert clocks["system_clock_modified"] is False
+                assert len(clocks["clocks"])==1 and clocks["clocks"][0]["authenticated"]
+                assert abs(clocks["clocks"][0]["estimated_offset_ms"])<5000
+                assert report["verified_payload_bytes"]==0 and receiver.returncode==0
+                results[case]={"observation":clocks,"receiver":report}
+            elif case=="success":
                 assert client.returncode==0,(client.returncode,client.stderr)
                 stats=json.loads(client.stdout)
                 assert stats["verified_payload_bytes"]==len(payload),stats

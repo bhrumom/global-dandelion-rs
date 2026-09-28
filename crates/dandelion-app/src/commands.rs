@@ -135,6 +135,7 @@ pub fn execute(cli: &Cli) -> Result<u8> {
         }
         Command::Platform { command } => {
             match command {
+                PlatformCommand::Time { peer } => clock(cli, *peer)?,
                 PlatformCommand::Inspect => {
                     output::json(&dandelion_platform_linux::inventory::observe()?)?
                 }
@@ -465,4 +466,87 @@ fn compat(command: &crate::cli::CompatCommand) -> Result<u8> {
         }
     }
     Ok(0)
+}
+
+fn clock(cli: &Cli, peer: bool) -> Result<()> {
+    if !peer {
+        return output::json(
+            &serde_json::json!({"unix_seconds":dandelion_updater::now()?,"uptime":dandelion_platform_linux::inventory::bounded_text(std::path::Path::new("/proc/uptime"),256)?,"system_clock_modified":false,"external_reference":false}),
+        );
+    }
+    use dandelion_transport::Transport;
+    let config = load(cli, Overrides::default())?;
+    let cfg = config.get();
+    if !matches!(cfg.transport.mode, dandelion_config::Mode::Tls) {
+        return Err(Error::Config(
+            "peer time comparison requires configured authorized mutual-TLS peers".into(),
+        ));
+    }
+    let settings = &cfg.transport.tls;
+    let peers = dandelion_core::targets::authorize(
+        &settings.peers,
+        settings.wan_enabled,
+        &settings.wan_allowlist,
+    )?;
+    let ca = dandelion_platform_linux::read_credential(&settings.ca_file, false)?;
+    let cert = dandelion_platform_linux::read_credential(&settings.certificate_file, false)?;
+    let key = dandelion_platform_linux::read_credential(&settings.private_key_file, true)?;
+    let tls = dandelion_transport::tls::client_config(&ca, &cert, &key)?;
+    let mut store = if cfg.state.enabled {
+        Some(dandelion_state::Store::open(
+            &cfg.state.directory,
+            StorageGuard,
+        )?)
+    } else {
+        None
+    };
+    let lease = if let Some(store) = &mut store {
+        Some(store.reserve(
+            cfg.pacing.traffic_limit_bytes,
+            cfg.state.lifetime_limit_bytes,
+        )?)
+    } else {
+        None
+    };
+    let limit = lease.as_ref().map_or(
+        cfg.pacing.traffic_limit_bytes,
+        dandelion_state::Lease::bytes,
+    );
+    let meter = dandelion_transport::metered::WireBudget::new(
+        limit,
+        cfg.pacing.bytes_per_second,
+        cfg.pacing.burst_bytes,
+    )?;
+    meter.set_schedule(cfg.pacing.schedule.clone())?;
+    let results = execution::drive(
+        Duration::from_millis(cfg.runtime.shutdown_timeout_ms),
+        |cancel| async {
+            let mut transport = dandelion_transport::tls::Peers::connect(
+                &peers,
+                tls,
+                meter.clone(),
+                Duration::from_millis(settings.timeout_ms),
+                settings.connect_attempts,
+                &cancel,
+            )
+            .await?;
+            let clocks = transport.clocks(&cancel).await?;
+            transport.finish(&cancel).await?;
+            Ok(clocks)
+        },
+    )?;
+    let (charged, accepted, received) = meter.totals()?;
+    if let (Some(store), Some(lease)) = (&mut store, lease) {
+        store.settle(
+            lease,
+            dandelion_core::Snapshot {
+                attempted_wire_bytes: charged,
+                accepted_wire_bytes: accepted,
+                ..Default::default()
+            },
+        )?;
+    }
+    output::json(
+        &serde_json::json!({"clocks":results,"system_clock_modified":false,"attempted_ciphertext_bytes":charged,"accepted_ciphertext_bytes":accepted,"received_ciphertext_bytes":received,"reference":"authenticated peer wall clock, not a UTC accuracy guarantee"}),
+    )
 }
