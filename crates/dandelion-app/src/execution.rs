@@ -22,6 +22,7 @@ pub struct RunOptions {
     pub interval_ms: u64,
     pub tui: bool,
     pub surface: bool,
+    pub resume: bool,
 }
 impl Default for RunOptions {
     fn default() -> Self {
@@ -31,6 +32,7 @@ impl Default for RunOptions {
             interval_ms: 1000,
             tui: false,
             surface: false,
+            resume: false,
         }
     }
 }
@@ -74,12 +76,26 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
         dandelion_tui::check_terminal()?;
     }
     let mut config = validated.get().clone();
+    if options.resume
+        && (!config.state.enabled || options.watch || options.repeat != 1 || options.surface)
+    {
+        return Err(Error::Config(
+            "file resume requires enabled state, one pass and a transfer mode".into(),
+        ));
+    }
+    let transport_policy =
+        serde_json::to_vec(&config.transport).map_err(|e| Error::Config(e.to_string()))?;
+    let mut resume_scope = blake3::Hasher::new();
+    resume_scope.update(b"GDAN/file-resume/v1");
+    resume_scope.update(&transport_policy);
     let tls_config = if matches!(config.transport.mode, dandelion_config::Mode::Tls)
         && !options.surface
     {
         let tls = &config.transport.tls;
         let ca = dandelion_platform_linux::read_credential(&tls.ca_file, false)?;
         let certificate = dandelion_platform_linux::read_credential(&tls.certificate_file, false)?;
+        resume_scope.update(&ca);
+        resume_scope.update(&certificate);
         let key = dandelion_platform_linux::read_credential(&tls.private_key_file, true)?;
         for path in [&tls.ca_file, &tls.certificate_file, &tls.private_key_file] {
             let name = path.file_name().and_then(|s| s.to_str()).ok_or_else(|| {
@@ -105,6 +121,19 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
     } else {
         None
     };
+    let checkpoints = if options.resume {
+        config.scanner.max_files = config.scanner.max_files.min(4096);
+        Some(std::sync::Arc::new(dandelion_state::FileCheckpoints::new(
+            resume_scope.finalize().to_hex().to_string(),
+            state
+                .as_ref()
+                .ok_or_else(|| Error::State("resume state missing".into()))?
+                .ledger(),
+        )?))
+    } else {
+        None
+    };
+    let runtime_checkpoints = checkpoints.clone();
     let lease = match &mut state {
         Some(store) => Some(store.reserve(
             config.pacing.traffic_limit_bytes,
@@ -129,7 +158,7 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
             let child = ui_cancel.clone();
             tokio::task::spawn_blocking(move || dandelion_tui::observe(rx, child))
         });
-        let output = service(config, options, cancel, tx, tls_config).await;
+        let output = service(config, options, cancel, tx, tls_config, runtime_checkpoints).await;
         ui_cancel.cancel();
         if let Some(ui) = ui {
             tokio::time::timeout(deadline, ui)
@@ -144,6 +173,10 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
     if let (Some(store), Some(lease), Ok(snapshot)) = (&mut state, lease, &result) {
         store.settle(lease, snapshot.clone())?;
     }
+    if let (Some(store), Some(checkpoints)) = (&mut state, checkpoints) {
+        let (scope, keys) = checkpoints.export()?;
+        store.save_checkpoints(scope, keys)?;
+    }
     result
 }
 
@@ -153,6 +186,7 @@ async fn service(
     cancel: CancellationToken,
     observer: tokio::sync::watch::Sender<Snapshot>,
     tls_config: Option<std::sync::Arc<rustls::ClientConfig>>,
+    checkpoints: Option<std::sync::Arc<dandelion_state::FileCheckpoints>>,
 ) -> Result<Snapshot> {
     let started = Instant::now();
     let mut total = Snapshot::default();
@@ -206,7 +240,13 @@ async fn service(
             break;
         }
         cycle.pacing.traffic_limit_bytes = remaining;
-        let supervisor = Supervisor::new(cycle.validate()?)?.with_observer(observer.clone());
+        let supervisor = Supervisor::new(cycle.validate()?)?
+            .with_observer(observer.clone())
+            .with_checkpoints(
+                checkpoints
+                    .clone()
+                    .map(|c| c as std::sync::Arc<dyn dandelion_core::checkpoint::Checkpoints>),
+            );
         let before = meter.totals()?;
         let mut stats = if options.surface {
             supervisor

@@ -50,6 +50,7 @@ pub fn execute(cli: &Cli) -> Result<u8> {
                         interval_ms: args.interval_ms,
                         tui: args.tui,
                         surface: false,
+                        resume: args.resume,
                     },
                 )?,
                 cli.json,
@@ -198,6 +199,7 @@ pub fn execute(cli: &Cli) -> Result<u8> {
                     max_depth: c.max_depth,
                     max_files: c.max_files,
                     max_read_bytes: c.max_read_bytes,
+                    checkpoints: None,
                 };
                 let result = execution::drive(Duration::from_secs(3), |cancel| async move {
                     tokio::task::spawn_blocking(move || {

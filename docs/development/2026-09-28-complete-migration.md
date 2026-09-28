@@ -56,3 +56,8 @@ Dependency audit of the updater found the maintained public-root data's
 CDLA-Permissive-2.0 license. Reviewed the published license and added a package-
 specific exception only for webpki-root-certs, with original license text and
 license inventory bundled into every artifact. No advisory/bans gate disabled.
+
+File-level resume increment: bounded core checkpoint port, target/certificate/source
+identity scoping, terminal receipt acknowledgement and persisted index. One-pass
+`--resume` skips only unchanged acknowledged files, replays incomplete files whole,
+and conserves durable traffic debt. Byte-level/exactly-once storage is not claimed.

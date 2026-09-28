@@ -16,6 +16,7 @@ pub struct ScanOptions {
     pub max_depth: usize,
     pub max_files: u64,
     pub max_read_bytes: u64,
+    pub checkpoints: Option<std::sync::Arc<dyn dandelion_core::checkpoint::Checkpoints>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -70,6 +71,7 @@ fn scan<A: SourceAccess>(
         }
     }
     let mut summary = ScanSummary::default();
+    let mut files_considered = 0u64;
     for root in unique {
         if cancel.is_cancelled() {
             return Err(Error::Cancelled);
@@ -101,9 +103,10 @@ fn scan<A: SourceAccess>(
                 summary.skipped_entries += 1;
                 continue;
             }
-            if summary.files_read >= options.max_files {
+            if files_considered >= options.max_files {
                 return Err(Error::Scan("file count limit reached".into()));
             }
+            files_considered += 1;
             let relative = entry
                 .path()
                 .strip_prefix(&root)
@@ -112,6 +115,25 @@ fn scan<A: SourceAccess>(
             // Identity and metadata are sampled from the opened handle, not a
             // second path lookup that could resolve to a different object.
             let before = file.stamp()?;
+            let mut identity = blake3::Hasher::new();
+            if let Some(checkpoints) = &options.checkpoints {
+                identity.update(checkpoints.scope().as_bytes());
+            }
+            identity.update(root.as_os_str().as_encoded_bytes());
+            identity.update(&[0]);
+            identity.update(relative.as_os_str().as_encoded_bytes());
+            identity.update(&before.len.to_be_bytes());
+            for item in before.change_token {
+                identity.update(&item.to_be_bytes());
+            }
+            let source_key = identity.finalize().to_hex().to_string();
+            if let Some(checkpoints) = &options.checkpoints
+                && checkpoints.contains(&source_key)?
+            {
+                summary.skipped_entries += 1;
+                continue;
+            }
+
             if before.len > options.max_read_bytes.saturating_sub(summary.payload_read) {
                 return Err(Error::Scan("source read budget would be exceeded".into()));
             }
@@ -119,6 +141,9 @@ fn scan<A: SourceAccess>(
                 .files_read
                 .checked_add(1)
                 .ok_or_else(|| Error::Scan("file id overflow".into()))?;
+            if let Some(checkpoints) = &options.checkpoints {
+                checkpoints.register(file_id, source_key)?;
+            }
             let mut offset = 0;
             let mut index = 0;
             loop {
@@ -257,6 +282,7 @@ mod tests {
             max_depth: 16,
             max_files: 100,
             max_read_bytes: 1024 * 1024,
+            checkpoints: None,
         }
     }
     #[tokio::test]

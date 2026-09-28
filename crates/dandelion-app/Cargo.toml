@@ -13,6 +13,7 @@ name = "dandelion"
 path = "src/main.rs"
 
 [dependencies]
+blake3.workspace = true
 dandelion-hotspot.workspace = true
 dandelion-updater.workspace = true
 rustls.workspace = true

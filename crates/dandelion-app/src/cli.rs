@@ -111,6 +111,9 @@ pub struct Run {
     /// Render a latest-value terminal dashboard on stderr.
     #[arg(long)]
     pub tui: bool,
+    /// Skip previously acknowledged unchanged files using enabled durable state.
+    #[arg(long,conflicts_with_all=["repeat","watch"])]
+    pub resume: bool,
 }
 impl Run {
     pub fn overrides(&self) -> Overrides {

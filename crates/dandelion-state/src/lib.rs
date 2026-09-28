@@ -22,6 +22,10 @@ pub struct Ledger {
     pub completed_runs: u64,
     pub last_snapshot: Option<Snapshot>,
     pub imported: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub checkpoints: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkpoint_scope: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -192,6 +196,19 @@ impl<G: WriteGuard> Store<G> {
         self.commit(next)?;
         Ok(true)
     }
+    pub fn save_checkpoints(&mut self, scope: String, keys: Vec<String>) -> Result<()> {
+        if keys.len() > 4096
+            || keys
+                .iter()
+                .any(|k| k.len() != 64 || !k.bytes().all(|b| b.is_ascii_hexdigit()))
+        {
+            return Err(Error::State("invalid checkpoint bounds".into()));
+        }
+        let mut next = self.ledger.clone();
+        next.checkpoint_scope = Some(scope);
+        next.checkpoints = keys;
+        self.commit(next)
+    }
     fn commit(&mut self, ledger: Ledger) -> Result<()> {
         let revision = self
             .revision
@@ -266,6 +283,93 @@ fn load(path: &Path) -> Result<Option<(u64, Ledger)>> {
 /// Read-only atomic snapshot; does not create directories or acquire a writer lock.
 pub fn inspect(directory: &Path) -> Result<Option<Ledger>> {
     Ok(load(&directory.join("state.json"))?.map(|(_, ledger)| ledger))
+}
+
+/// Bounded acknowledged-file window, scoped to exact transport/credential policy.
+/// Pending ids live only in this owned handle, never in process-global maps.
+#[derive(Debug)]
+pub struct FileCheckpoints {
+    scope: String,
+    state: std::sync::Mutex<CheckpointState>,
+}
+#[derive(Debug)]
+struct CheckpointState {
+    completed: std::collections::BTreeSet<String>,
+    pending: std::collections::BTreeMap<u64, String>,
+}
+impl FileCheckpoints {
+    pub fn new(scope: String, ledger: &Ledger) -> Result<Self> {
+        let keys = if ledger.checkpoint_scope.as_deref() == Some(&scope) {
+            ledger
+                .checkpoints
+                .iter()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>()
+        } else {
+            std::collections::BTreeSet::new()
+        };
+        if keys.len() > 4096 || keys.iter().any(|s: &String| s.len() != 64) {
+            return Err(Error::State("invalid checkpoint history".into()));
+        }
+        Ok(Self {
+            scope,
+            state: std::sync::Mutex::new(CheckpointState {
+                completed: keys,
+                pending: std::collections::BTreeMap::new(),
+            }),
+        })
+    }
+    pub fn export(&self) -> Result<(String, Vec<String>)> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| Error::State("checkpoint lock poisoned".into()))?;
+        Ok((
+            self.scope.clone(),
+            state.completed.iter().cloned().collect(),
+        ))
+    }
+}
+impl dandelion_core::checkpoint::Checkpoints for FileCheckpoints {
+    fn scope(&self) -> &str {
+        &self.scope
+    }
+    fn contains(&self, key: &str) -> Result<bool> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| Error::State("checkpoint lock poisoned".into()))?
+            .completed
+            .contains(key))
+    }
+    fn register(&self, file_id: u64, key: String) -> Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| Error::State("checkpoint lock poisoned".into()))?;
+        if state.pending.len() >= 4097 {
+            return Err(Error::State("pending checkpoint limit exceeded".into()));
+        }
+        state.pending.insert(file_id, key);
+        Ok(())
+    }
+    fn acknowledge(&self, file_id: u64) -> Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| Error::State("checkpoint lock poisoned".into()))?;
+        let key = state
+            .pending
+            .remove(&file_id)
+            .ok_or_else(|| Error::State("receipt missing source identity".into()))?;
+        if state.completed.len() >= 4096 && !state.completed.contains(&key) {
+            return Err(Error::State(
+                "file-level checkpoint capacity is 4096; partition the source workload".into(),
+            ));
+        }
+        state.completed.insert(key);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -346,5 +450,35 @@ mod tests {
         let p = d.path().join("no");
         assert!(Store::open(&p, Denied).is_err());
         assert!(!p.exists());
+    }
+
+    #[test]
+    fn file_checkpoint_scope_receipts_and_restart() {
+        use dandelion_core::checkpoint::Checkpoints;
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("s");
+        let mut store = Store::open(&path, Guard).unwrap();
+        let checkpoints = FileCheckpoints::new("policy-a".into(), store.ledger()).unwrap();
+        let key = "a".repeat(64);
+        checkpoints.register(1, key.clone()).unwrap();
+        assert!(!checkpoints.contains(&key).unwrap());
+        checkpoints.acknowledge(1).unwrap();
+        let (scope, keys) = checkpoints.export().unwrap();
+        store.save_checkpoints(scope, keys).unwrap();
+        drop(store);
+        let store = Store::open(&path, Guard).unwrap();
+        assert!(
+            FileCheckpoints::new("policy-a".into(), store.ledger())
+                .unwrap()
+                .contains(&key)
+                .unwrap()
+        );
+        assert!(
+            !FileCheckpoints::new("policy-b".into(), store.ledger())
+                .unwrap()
+                .contains(&key)
+                .unwrap()
+        );
+        assert!(checkpoints.acknowledge(2).is_err());
     }
 }

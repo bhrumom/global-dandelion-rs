@@ -12,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 pub struct Supervisor {
     config: ValidatedConfig,
     observer: Option<tokio::sync::watch::Sender<Snapshot>>,
+    checkpoints: Option<std::sync::Arc<dyn dandelion_core::checkpoint::Checkpoints>>,
 }
 impl Supervisor {
     pub fn new(config: ValidatedConfig) -> Result<Self> {
@@ -19,7 +20,15 @@ impl Supervisor {
         Ok(Self {
             config,
             observer: None,
+            checkpoints: None,
         })
+    }
+    pub fn with_checkpoints(
+        mut self,
+        checkpoints: Option<std::sync::Arc<dyn dandelion_core::checkpoint::Checkpoints>>,
+    ) -> Self {
+        self.checkpoints = checkpoints;
+        self
     }
     pub fn with_observer(mut self, observer: tokio::sync::watch::Sender<Snapshot>) -> Self {
         self.observer = Some(observer);
@@ -68,6 +77,7 @@ impl Supervisor {
                 max_depth: cfg.scanner.max_depth,
                 max_files: cfg.scanner.max_files,
                 max_read_bytes: cfg.scanner.max_read_bytes,
+                checkpoints: self.checkpoints.clone(),
             },
             transfer_id,
             tx,
@@ -143,6 +153,9 @@ impl Supervisor {
             snapshot.verified_payload_bytes += receipt.verified_payload_bytes;
             snapshot.chunks_sent += 1;
             if chunk.last {
+                if let Some(checkpoints) = &self.checkpoints {
+                    checkpoints.acknowledge(chunk.file_id)?;
+                }
                 snapshot.files_completed += 1;
             }
             if let Some(observer) = &self.observer {

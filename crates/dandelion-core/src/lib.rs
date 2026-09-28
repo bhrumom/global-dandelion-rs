@@ -1,4 +1,5 @@
 //! Platform-independent transfer values and failure semantics.
+pub mod checkpoint;
 pub mod filesystem;
 pub mod process;
 pub mod schedule;

@@ -218,3 +218,42 @@ fn hotspot_plan_is_read_only_and_apply_requires_explicit_consent() {
     assert_eq!(refused.status.code(), Some(2));
     assert!(!journal.exists());
 }
+
+#[test]
+fn file_level_resume_skips_only_unchanged_acknowledged_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("data");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("a"), b"abc").unwrap();
+    std::fs::write(source.join("b"), b"defg").unwrap();
+    let mut config = dandelion_config::Config::default();
+    config.scanner.roots = vec![source.clone()];
+    config.state.enabled = true;
+    config.state.directory = dir.path().join("state");
+    let file = dir.path().join("config.toml");
+    std::fs::write(&file, config.to_toml().unwrap()).unwrap();
+    let args = [
+        "--config",
+        file.to_str().unwrap(),
+        "run",
+        "--resume",
+        "--json",
+    ];
+    let run = || {
+        let out = cli(&args);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice::<serde_json::Value>(&out.stdout).unwrap()
+    };
+    assert_eq!(run()["verified_payload_bytes"], 7);
+    let skipped = run();
+    assert_eq!(skipped["verified_payload_bytes"], 0);
+    assert_eq!(skipped["files_completed"], 0);
+    std::fs::write(source.join("b"), b"new content").unwrap();
+    let changed = run();
+    assert_eq!(changed["verified_payload_bytes"], 11);
+    assert_eq!(changed["files_completed"], 1);
+}
