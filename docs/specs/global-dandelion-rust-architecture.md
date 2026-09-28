@@ -347,12 +347,15 @@ gate-ID mismatch or self-review MUST fail the complete gate.
 
 Gate reports are not generic pass envelopes. The verifier enforces gate-specific
 semantics before full replacement can become true: current-ci must bind both native
-artifacts, their BUILD-INFO and packaged python-rust-comparison commit, checksums and
-self-tests to the exact commit; hotspot
+artifacts, their BUILD-INFO and packaged python-rust-comparison commit, GitHub ZIP,
+outer archive and binary digests, checksums and self-tests to the exact commit; hotspot
 must identify real non-virtual Wi-Fi hardware and prove apply/interruption/rollback;
 hotplug must identify original and replacement physical devices and prove old
 checkpoint rejection at the same mount path; controlled-cutover must contain raw
-same-fixture Python/Rust samples with complete transfer integrity; release trust
+same-fixture Python/Rust samples with complete transfer integrity and MUST cross-bind
+its architecture, artifact ID/name, GitHub ZIP digest, outer archive digest, binary
+digest and workflow/BUILD-INFO/comparison commit to the exact corresponding current-ci
+artifact; release trust
 must identify a non-synthetic production signer/origin and prove staging, activation,
 health, rollback and post-rollback health. A minimal JSON object that only says pass
 is invalid even when its digest is correct.

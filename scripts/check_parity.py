@@ -108,6 +108,8 @@ def validate_current_ci(report, current):
         name = text_field(item, "artifact_name", f"current-ci artifact {arch}")
         require(current in name, f"current-ci artifact {arch}: artifact name must contain tested commit")
         sha256_field(item, "github_zip_sha256", f"current-ci artifact {arch}")
+        sha256_field(item, "outer_archive_sha256", f"current-ci artifact {arch}")
+        sha256_field(item, "binary_sha256", f"current-ci artifact {arch}")
         exact_commit(item, "workflow_head_commit", f"current-ci artifact {arch}", current)
         exact_commit(item, "build_info_commit", f"current-ci artifact {arch}", current)
         exact_commit(item, "comparison_commit", f"current-ci artifact {arch}", current)
@@ -156,8 +158,19 @@ def validate_physical_hotplug(report):
         bool_field(life, key, "physical-hotplug.lifecycle")
 
 def validate_controlled_cutover(report, current):
+    architecture = text_field(report, "artifact_architecture", "controlled-cutover")
+    require(architecture in {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"},
+            "controlled-cutover.artifact_architecture: unsupported native artifact")
+    positive_int_field(report, "artifact_id", "controlled-cutover")
+    artifact_name = text_field(report, "artifact_name", "controlled-cutover")
+    require(current in artifact_name and architecture in artifact_name,
+            "controlled-cutover.artifact_name: must bind architecture and tested commit")
+    sha256_field(report, "artifact_github_zip_sha256", "controlled-cutover")
+    sha256_field(report, "artifact_outer_archive_sha256", "controlled-cutover")
+    sha256_field(report, "artifact_binary_sha256", "controlled-cutover")
     exact_commit(report, "artifact_workflow_head_commit", "controlled-cutover", current)
     exact_commit(report, "artifact_build_info_commit", "controlled-cutover", current)
+    exact_commit(report, "artifact_comparison_commit", "controlled-cutover", current)
     require(report.get("python_source_commit") == SOURCE_COMMIT,
             "controlled-cutover.python_source_commit: wrong pinned source")
     require(report.get("python_source_blob") == SOURCE_BLOB,
@@ -221,6 +234,35 @@ def validate_production_release_trust(report, current):
                 "rollback_exercised", "rollback_succeeded", "post_rollback_health_verified"):
         bool_field(activation, key, "production-release-trust.activation")
 
+def validate_cross_gate_bindings(reports, current):
+    current_ci = obj(reports.get("current-ci"), "cross-gate current-ci")
+    cutover = obj(reports.get("controlled-cutover"), "cross-gate controlled-cutover")
+    architecture = text_field(cutover, "artifact_architecture", "controlled-cutover")
+    matches = [
+        item for item in arr(current_ci.get("artifacts"), "current-ci.artifacts")
+        if isinstance(item, dict) and item.get("architecture") == architecture
+    ]
+    require(len(matches) == 1,
+            "controlled-cutover: exactly one matching current-ci artifact is required")
+    artifact = matches[0]
+    for cutover_key, ci_key in (
+        ("artifact_id", "artifact_id"),
+        ("artifact_name", "artifact_name"),
+        ("artifact_workflow_head_commit", "workflow_head_commit"),
+        ("artifact_build_info_commit", "build_info_commit"),
+        ("artifact_comparison_commit", "comparison_commit"),
+    ):
+        require(cutover.get(cutover_key) == artifact.get(ci_key),
+                f"controlled-cutover.{cutover_key}: must match current-ci artifact {ci_key}")
+    for cutover_key, ci_key in (
+        ("artifact_github_zip_sha256", "github_zip_sha256"),
+        ("artifact_outer_archive_sha256", "outer_archive_sha256"),
+        ("artifact_binary_sha256", "binary_sha256"),
+    ):
+        require(cutover.get(cutover_key, "").lower() == artifact.get(ci_key, "").lower(),
+                f"controlled-cutover.{cutover_key}: must match current-ci artifact {ci_key}")
+    exact_commit(cutover, "artifact_workflow_head_commit", "controlled-cutover", current)
+
 def validate_gate_semantics(gate_id, report, current):
     if gate_id == "current-ci":
         validate_current_ci(report, current)
@@ -251,6 +293,7 @@ def validate_external_evidence(evidence_path: Path, current: str, gates: dict) -
     require(set(proofs) == required_ids, "evidence must contain exactly the required gate IDs")
     required_gate_fields = set(contract.get("required_gate_fields", []))
     required_report_fields = set(contract.get("required_report_fields", []))
+    reports = {}
     for gate in gates["required_gates"]:
         gate_id = gate["id"]
         proof = proofs[gate_id]
@@ -285,6 +328,8 @@ def validate_external_evidence(evidence_path: Path, current: str, gates: dict) -
         require(isinstance(proof.get("review_reference"), str) and proof["review_reference"].strip(),
                 f"{gate_id}: immutable external review reference required")
         validate_gate_semantics(gate_id, report, current)
+        reports[gate_id] = report
+    validate_cross_gate_bindings(reports, current)
 
 def main() -> None:
     data = json.loads((ROOT / "docs/migration/parity.json").read_text())

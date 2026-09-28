@@ -55,7 +55,7 @@
         "all four required jobs successful",
         "x86_64 and aarch64 artifacts bind workflow head and BUILD-INFO to tested commit",
         "packaged python-rust-comparison rust_sha binds the same tested commit",
-        "GitHub ZIP digest is recorded",
+        "GitHub ZIP, outer tar archive and packaged binary SHA-256 digests are recorded",
         "outer checksum, inner SHA256SUMS and packaged self-test verified"
       ],
       "physical-hotspot": [
@@ -74,7 +74,8 @@
         "resume scope changed and service recovered"
       ],
       "controlled-cutover": [
-        "workflow artifact and BUILD-INFO bind exact tested commit",
+        "workflow artifact, BUILD-INFO and packaged comparison bind exact tested commit",
+        "artifact architecture/ID/name, GitHub ZIP SHA-256, outer tar SHA-256 and binary SHA-256 exactly match one current-ci artifact",
         "pinned Python source commit/blob verified",
         "at least three repetitions",
         "same non-empty fixture",

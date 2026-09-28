@@ -192,3 +192,27 @@ and the synthetic evidence self-test covers that field. Run 36455047164 remains 
 useful historical measurement but is not final current-ci evidence after this repair;
 a fresh exact-head run and freshly inspected artifacts are required.
 
+
+
+## Controlled-cutover concrete-artifact cross-binding closure
+
+A continuation audit found that controlled-cutover provenance still stopped one level
+too early. The harness required the workflow head commit and extracted BUILD-INFO to
+equal the tested commit, but two separately produced binaries from the same source
+commit could still satisfy those fields. That is insufficient for the requirement to
+rerun cutover with the exact final artifact that passed current-ci.
+
+The evidence contract now records the GitHub ZIP SHA-256, outer tar SHA-256 and
+packaged dandelion binary SHA-256 for each current-ci architecture. controlled-cutover
+records its architecture, GitHub artifact ID/name, the same three digests, workflow
+head, BUILD-INFO commit and packaged comparison rust_sha. check_parity.py performs a
+cross-gate join and requires every one of those fields to equal exactly one current-ci
+artifact. A same-commit-but-different binary therefore fails closed.
+
+controlled_cutover.py now validates the packaged comparison commit, computes the
+actual archive and binary SHA-256 values it exercised, and emits the concrete artifact
+identity. The evidence self-test includes a negative case that re-hashes an otherwise
+valid controlled-cutover report after changing only its binary digest and confirms
+that the cross-gate verifier rejects it. Any earlier cutover candidate remains
+historical; the next candidate must be produced from the exact artifact of the new
+final HEAD after its current-ci run succeeds.

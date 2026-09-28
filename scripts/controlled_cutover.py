@@ -46,6 +46,19 @@ def verify_source(path: Path) -> None:
         raise RuntimeError(f"pinned source is missing reviewed expressions: {missing}")
 
 
+def sha256_file(path: Path) -> str:
+    if not path.is_file():
+        raise RuntimeError(f"artifact input is not a regular file: {path}")
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while True:
+            block = stream.read(1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def iter_files(root: Path):
     for directory, dirs, files in os.walk(root, topdown=True):
         dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
@@ -268,6 +281,12 @@ def main() -> None:
     parser.add_argument("--tested-commit")
     parser.add_argument("--artifact-head-commit")
     parser.add_argument("--artifact-build-info", type=Path)
+    parser.add_argument("--artifact-comparison", type=Path)
+    parser.add_argument("--artifact-archive", type=Path)
+    parser.add_argument("--artifact-architecture")
+    parser.add_argument("--artifact-id", type=int)
+    parser.add_argument("--artifact-name")
+    parser.add_argument("--artifact-github-zip-sha256")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--large-mib", type=int, default=64)
     parser.add_argument("--small-files", type=int, default=1000)
@@ -292,18 +311,44 @@ def main() -> None:
         raise SystemExit("--binary and --python-source are required")
     if args.repeats < 3:
         raise SystemExit("--repeats must be at least 3")
-    if not args.tested_commit or not args.artifact_head_commit or not args.artifact_build_info:
-        raise SystemExit("--tested-commit, --artifact-head-commit and --artifact-build-info are required")
+    required_artifact_args = (
+        args.tested_commit, args.artifact_head_commit, args.artifact_build_info,
+        args.artifact_comparison, args.artifact_archive, args.artifact_architecture,
+        args.artifact_id, args.artifact_name, args.artifact_github_zip_sha256,
+    )
+    if any(value is None or value == "" for value in required_artifact_args):
+        raise SystemExit(
+            "tested commit plus artifact head/build-info/comparison/archive/architecture/id/name/GitHub ZIP SHA-256 are required"
+        )
     if len(args.tested_commit) != 40 or any(ch not in "0123456789abcdef" for ch in args.tested_commit.lower()):
         raise SystemExit("--tested-commit must be a full 40-hex commit SHA")
     if args.artifact_head_commit != args.tested_commit:
         raise SystemExit("artifact workflow head_sha must equal the exact tested commit")
+    if args.artifact_architecture not in {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"}:
+        raise SystemExit("artifact architecture must be one of the native CI targets")
+    if args.artifact_id <= 0:
+        raise SystemExit("artifact id must be positive")
+    if args.tested_commit not in args.artifact_name or args.artifact_architecture not in args.artifact_name:
+        raise SystemExit("artifact name must bind the exact architecture and tested commit")
+    if len(args.artifact_github_zip_sha256) != 64 or any(
+        ch not in "0123456789abcdef" for ch in args.artifact_github_zip_sha256.lower()
+    ):
+        raise SystemExit("artifact GitHub ZIP SHA-256 must be 64 hex characters")
     build_info = args.artifact_build_info.read_text(encoding="utf-8")
     build_sha = next((line.split("=", 1)[1].strip() for line in build_info.splitlines() if line.startswith("git_sha=")), None)
     if build_sha != args.tested_commit:
         raise SystemExit(f"artifact BUILD-INFO git_sha {build_sha!r} does not equal tested commit {args.tested_commit}")
+    comparison = json.loads(args.artifact_comparison.read_text(encoding="utf-8"))
+    comparison_sha = comparison.get("rust_sha") if isinstance(comparison, dict) else None
+    if comparison_sha != args.tested_commit:
+        raise SystemExit(
+            f"artifact comparison rust_sha {comparison_sha!r} does not equal tested commit {args.tested_commit}"
+        )
     verify_source(args.python_source)
-    binary = str(args.binary.resolve())
+    binary_path = args.binary.resolve()
+    binary_sha256 = sha256_file(binary_path)
+    archive_sha256 = sha256_file(args.artifact_archive)
+    binary = str(binary_path)
     env = {k: v for k, v in os.environ.items() if not k.startswith("DANDELION_")}
 
     with tempfile.TemporaryDirectory(prefix="gdan-controlled-cutover-") as tmp:
@@ -358,8 +403,15 @@ def main() -> None:
             "schema_version": 1,
             "gate_id": "controlled-cutover",
             "tested_commit": args.tested_commit,
+            "artifact_architecture": args.artifact_architecture,
+            "artifact_id": args.artifact_id,
+            "artifact_name": args.artifact_name,
+            "artifact_github_zip_sha256": args.artifact_github_zip_sha256.lower(),
+            "artifact_outer_archive_sha256": archive_sha256,
+            "artifact_binary_sha256": binary_sha256,
             "artifact_workflow_head_commit": args.artifact_head_commit,
             "artifact_build_info_commit": build_sha,
+            "artifact_comparison_commit": comparison_sha,
             "result": "pass",
             "performed_by": f"controlled-cutover.py on {socket.gethostname()}",
             "python_source_commit": SOURCE_COMMIT,

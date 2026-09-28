@@ -41,6 +41,8 @@ def report_for(gate_id: str) -> dict:
                     "artifact_id": index + 1,
                     "artifact_name": f"dandelion-{arch}-{current}",
                     "github_zip_sha256": "a" * 64,
+                    "outer_archive_sha256": "c" * 64,
+                    "binary_sha256": "d" * 64,
                     "workflow_head_commit": current,
                     "build_info_commit": current,
                     "comparison_commit": current,
@@ -105,8 +107,15 @@ def report_for(gate_id: str) -> dict:
                     "summary": {"samples": repeats},
                 }
         base.update({
+            "artifact_architecture": "x86_64-unknown-linux-gnu",
+            "artifact_id": 1,
+            "artifact_name": f"dandelion-x86_64-unknown-linux-gnu-{current}",
+            "artifact_github_zip_sha256": "a" * 64,
+            "artifact_outer_archive_sha256": "c" * 64,
+            "artifact_binary_sha256": "d" * 64,
             "artifact_workflow_head_commit": current,
             "artifact_build_info_commit": current,
+            "artifact_comparison_commit": current,
             "python_source_commit": "aa7f3720c42856f0e1d18742f78fba156227ee79",
             "python_source_blob": "54bf6226eb80d1ef6c4f6087fb02579141ab134f",
             "fixture": {"regular_files": 1, "total_file_bytes": payload},
@@ -190,7 +199,8 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
     expect_failure(manifest, "reviewer did not bind exact report digest")
 
     hotspot = "physical-hotspot"
-    weak = json.loads(report_paths[hotspot].read_text())
+    strong_hotspot = report_paths[hotspot].read_bytes()
+    weak = json.loads(strong_hotspot)
     del weak["hardware"]
     weak_raw = (json.dumps(weak, sort_keys=True) + "\n").encode()
     report_paths[hotspot].write_bytes(weak_raw)
@@ -200,5 +210,23 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
     weak_proof["gates"][hotspot]["reviewed_report_sha256"] = weak_digest
     manifest.write_text(json.dumps(weak_proof, indent=2) + "\n")
     expect_failure(manifest, "generic pass report bypassed gate-specific semantics")
+    report_paths[hotspot].write_bytes(strong_hotspot)
 
-print(json.dumps({"evidence_contract": "pass", "synthetic_only": True, "gate_specific_semantics": True}))
+    cutover = "controlled-cutover"
+    mismatched = json.loads(report_paths[cutover].read_text())
+    mismatched["artifact_binary_sha256"] = "e" * 64
+    mismatched_raw = (json.dumps(mismatched, sort_keys=True) + "\n").encode()
+    report_paths[cutover].write_bytes(mismatched_raw)
+    mismatch_proof = copy.deepcopy(proof)
+    mismatch_digest = hashlib.sha256(mismatched_raw).hexdigest()
+    mismatch_proof["gates"][cutover]["report_sha256"] = mismatch_digest
+    mismatch_proof["gates"][cutover]["reviewed_report_sha256"] = mismatch_digest
+    manifest.write_text(json.dumps(mismatch_proof, indent=2) + "\n")
+    expect_failure(manifest, "controlled cutover used a different binary than current-ci")
+
+print(json.dumps({
+    "evidence_contract": "pass",
+    "synthetic_only": True,
+    "gate_specific_semantics": True,
+    "cross_gate_artifact_binding": True,
+}))
