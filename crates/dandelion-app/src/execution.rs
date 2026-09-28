@@ -52,7 +52,9 @@ fn extend_resume_mount_scope(
     canonical.sort();
     canonical.dedup();
     if canonical.is_empty() {
-        return Err(Error::Config("resume requires at least one mounted source".into()));
+        return Err(Error::Config(
+            "resume requires at least one mounted source".into(),
+        ));
     }
     for root in canonical {
         if root.parent().is_none() {
@@ -60,8 +62,7 @@ fn extend_resume_mount_scope(
                 "filesystem root is not a resumable data source".into(),
             ));
         }
-        let mount =
-            dandelion_platform_linux::inventory::source_mount_identity(table, &root)?;
+        let mount = dandelion_platform_linux::inventory::source_mount_identity(table, &root)?;
         hash_resume_mount_binding(hasher, &root, &mount)?;
     }
     Ok(())
@@ -405,7 +406,6 @@ async fn service(
     observer.send_replace(total.clone());
     Ok(total)
 }
-
 
 #[cfg(test)]
 mod resume_scope_tests {

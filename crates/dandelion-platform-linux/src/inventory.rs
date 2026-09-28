@@ -151,7 +151,10 @@ pub fn source_mount_identity(table: &[Mount], source_root: &Path) -> Result<Moun
     let mut best: Option<&Mount> = None;
     let mut best_depth = 0usize;
     let mut ambiguous = false;
-    for mount in table.iter().filter(|m| source_root.starts_with(&m.mountpoint)) {
+    for mount in table
+        .iter()
+        .filter(|m| source_root.starts_with(&m.mountpoint))
+    {
         if !mount.mountpoint.is_absolute() {
             continue;
         }
@@ -350,9 +353,11 @@ mod tests {
     fn resume_identity_changes_on_remount_or_replacement() {
         let root = Path::new("/media/My Disk/data");
         let original = source_mount_identity(&parse_mountinfo(M).unwrap(), root).unwrap();
-        let remounted =
-            source_mount_identity(&parse_mountinfo(&M.replace("36 25", "37 25")).unwrap(), root)
-                .unwrap();
+        let remounted = source_mount_identity(
+            &parse_mountinfo(&M.replace("36 25", "37 25")).unwrap(),
+            root,
+        )
+        .unwrap();
         let replaced =
             source_mount_identity(&parse_mountinfo(&M.replace("8:1", "8:2")).unwrap(), root)
                 .unwrap();
