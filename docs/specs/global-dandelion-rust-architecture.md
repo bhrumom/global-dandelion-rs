@@ -382,3 +382,12 @@ The migration ledger remains the authoritative current implementation/evidence i
 
 These references inform implementation mechanics; the contracts above are project
 requirements and are not claims that any external source certifies this product.
+
+
+### Reviewer attestation hardening (evidence contract v2)
+
+Full-replacement acceptance MUST NOT trust a manifest-provided reviewer name or arbitrary reference string. Each gate report now carries both `performed_by` (execution context) and `performed_actor` (the accountable operator/automation principal). The independent reviewer must differ from both.
+
+For a real `--require-complete` verification, every gate entry must reference a live GitHub pull-request review API URL of the form `https://api.github.com/repos/{owner}/{repo}/pulls/{pr}/reviews/{id}`. The verifier re-fetches that review, requires state `APPROVED`, requires its `commit_id` to equal the exact tested commit, and requires the returned GitHub login to equal `reviewed_by`.
+
+The GitHub review body itself is a JSON attestation containing `schema_version=1`, the exact `gate_id`, exact `tested_commit`, exact gate-report SHA-256 and `decision=approve`. The manifest pins the exact UTF-8 review body with `review_body_sha256`; an edited, dismissed, stale, nonexistent, non-GitHub or mismatched review therefore fails closed. CI self-tests inject a synthetic review resolver only for contract tests; real full-replacement verification uses the live GitHub API.

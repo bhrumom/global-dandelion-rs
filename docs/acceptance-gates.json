@@ -23,9 +23,9 @@
       "requirement": "Operator-provisioned trusted signing key, actual signed release origin/artifacts, staged activation and rollback in the deployment environment."
     }
   ],
-  "evidence_delivery": "Pass the independently reviewed external evidence manifest to scripts/check_parity.py --require-complete --evidence FILE. A manifest-only pass is insufficient; every gate report is re-read and digest/bindings/reviewer independence are verified.",
+  "evidence_delivery": "Pass the independently reviewed external evidence manifest to scripts/check_parity.py --require-complete --evidence FILE. A manifest-only pass is insufficient; every gate report is re-read and digest/bindings/gate semantics are verified, and every reviewer attestation is re-fetched from the GitHub PR review API. GITHUB_TOKEN is optional for public repositories but recommended to avoid anonymous API rate limits.",
   "evidence_contract": {
-    "schema_version": 1,
+    "schema_version": 2,
     "hash_algorithm": "sha256",
     "max_manifest_bytes": 1048576,
     "max_report_bytes": 16777216,
@@ -38,16 +38,18 @@
       "reviewed_report_sha256",
       "reviewed_commit",
       "review_decision",
-      "review_reference"
+      "review_reference",
+      "review_body_sha256"
     ],
     "required_report_fields": [
       "schema_version",
       "gate_id",
       "tested_commit",
       "result",
-      "performed_by"
+      "performed_by",
+      "performed_actor"
     ],
-    "reviewer_rule": "reviewed_by must be non-empty and differ case-insensitively from report.performed_by; review binding must approve the exact gate report digest and tested commit and provide an immutable external review reference",
+    "reviewer_rule": "reviewed_by must match the live GitHub PR review actor and differ case-insensitively from both report.performed_actor and report.performed_by; the live review must be APPROVED on the exact tested commit and its JSON body attestation must bind gate ID, report SHA-256, tested commit and approve decision",
     "report_rule": "report must be a regular file opened without following symlinks; its SHA-256, gate_id, tested_commit, pass result and gate-specific semantic requirements must verify",
     "gate_specific_semantics": {
       "current-ci": [
@@ -89,6 +91,7 @@
         "actual production release origin and artifact digest/provenance",
         "staging, activation, health verification, rollback and post-rollback health verified"
       ]
-    }
+    },
+    "review_reference_rule": "review_reference must be an https://api.github.com/repos/{owner}/{repo}/pulls/{pr}/reviews/{id} URL. Full-replacement verification re-fetches that review (using GITHUB_TOKEN when provided), verifies its numeric ID/state/commit/reviewer, and checks review_body_sha256 so edited/dismissed/stale reviews fail closed."
   }
 }

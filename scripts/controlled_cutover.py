@@ -287,6 +287,7 @@ def main() -> None:
     parser.add_argument("--artifact-id", type=int)
     parser.add_argument("--artifact-name")
     parser.add_argument("--artifact-github-zip-sha256")
+    parser.add_argument("--performed-actor")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--large-mib", type=int, default=64)
     parser.add_argument("--small-files", type=int, default=1000)
@@ -315,10 +316,11 @@ def main() -> None:
         args.tested_commit, args.artifact_head_commit, args.artifact_build_info,
         args.artifact_comparison, args.artifact_archive, args.artifact_architecture,
         args.artifact_id, args.artifact_name, args.artifact_github_zip_sha256,
+        args.performed_actor,
     )
     if any(value is None or value == "" for value in required_artifact_args):
         raise SystemExit(
-            "tested commit plus artifact head/build-info/comparison/archive/architecture/id/name/GitHub ZIP SHA-256 are required"
+            "tested commit plus artifact head/build-info/comparison/archive/architecture/id/name/GitHub ZIP SHA-256 and performed actor are required"
         )
     if len(args.tested_commit) != 40 or any(ch not in "0123456789abcdef" for ch in args.tested_commit.lower()):
         raise SystemExit("--tested-commit must be a full 40-hex commit SHA")
@@ -414,6 +416,7 @@ def main() -> None:
             "artifact_comparison_commit": comparison_sha,
             "result": "pass",
             "performed_by": f"controlled-cutover.py on {socket.gethostname()}",
+            "performed_actor": args.performed_actor,
             "python_source_commit": SOURCE_COMMIT,
             "python_source_blob": SOURCE_BLOB,
             "source_execution_policy": "legacy module hash/snippets verified; legacy main never imported or executed",

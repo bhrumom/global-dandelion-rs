@@ -9,10 +9,15 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 ROOT = Path(__file__).resolve().parents[1]
 HEX40 = re.compile(r"[0-9a-fA-F]{40}")
 HEX64 = re.compile(r"[0-9a-fA-F]{64}")
+GITHUB_REVIEW_API = re.compile(
+    r"https://api\.github\.com/repos/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pulls/([1-9][0-9]*)/reviews/([1-9][0-9]*)"
+)
 SOURCE_COMMIT = "aa7f3720c42856f0e1d18742f78fba156227ee79"
 SOURCE_BLOB = "54bf6226eb80d1ef6c4f6087fb02579141ab134f"
 
@@ -277,7 +282,75 @@ def validate_gate_semantics(gate_id, report, current):
     else:
         raise RuntimeError(f"unknown acceptance gate {gate_id}")
 
-def validate_external_evidence(evidence_path: Path, current: str, gates: dict) -> None:
+def fetch_github_review(reference: str) -> dict:
+    match = GITHUB_REVIEW_API.fullmatch(reference)
+    require(match is not None, "review_reference: GitHub pull-request review API URL required")
+    request = urlrequest.Request(
+        reference,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "global-dandelion-rs-acceptance-verifier",
+        },
+    )
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urlrequest.urlopen(request, timeout=15) as response:
+            require(getattr(response, "status", 200) == 200, "review_reference: GitHub review lookup did not return 200")
+            raw = response.read(1_048_577)
+    except (urlerror.HTTPError, urlerror.URLError, TimeoutError, OSError) as error:
+        raise RuntimeError(f"review_reference: cannot verify GitHub review: {error}") from error
+    require(len(raw) <= 1_048_576, "review_reference: GitHub review response too large")
+    review = load_json_bytes(raw, "GitHub review")
+    require(isinstance(review, dict), "review_reference: GitHub review must be an object")
+    require(review.get("id") == int(match.group(4)), "review_reference: GitHub review ID mismatch")
+    return review
+
+
+def validate_review_binding(gate_id, proof, report, digest, current, review_fetcher=None):
+    performer = text_field(report, "performed_by", f"{gate_id} report")
+    actor = text_field(report, "performed_actor", f"{gate_id} report")
+    reviewer = text_field(proof, "reviewed_by", f"{gate_id} evidence")
+    require(reviewer.casefold() != performer.casefold(), f"{gate_id}: reviewer must differ from performed_by")
+    require(reviewer.casefold() != actor.casefold(), f"{gate_id}: reviewer must differ from performed_actor")
+    require(proof.get("reviewed_report_sha256", "").lower() == digest.lower(),
+            f"{gate_id}: reviewer binding must name exact report digest")
+    require(proof.get("reviewed_commit") == current,
+            f"{gate_id}: reviewer binding must name exact tested commit")
+    require(proof.get("review_decision") == "approve",
+            f"{gate_id}: reviewer decision must be approve")
+
+    reference = text_field(proof, "review_reference", f"{gate_id} evidence")
+    match = GITHUB_REVIEW_API.fullmatch(reference)
+    require(match is not None, f"{gate_id}: review_reference must be an immutable GitHub PR review API URL")
+    review = (review_fetcher or fetch_github_review)(reference)
+    require(isinstance(review, dict), f"{gate_id}: review lookup must return an object")
+    require(review.get("id") == int(match.group(4)), f"{gate_id}: external review ID mismatch")
+    user = obj(review.get("user"), f"{gate_id} GitHub review user")
+    login = text_field(user, "login", f"{gate_id} GitHub review user")
+    require(login.casefold() == reviewer.casefold(), f"{gate_id}: reviewed_by does not match GitHub review actor")
+    require(str(review.get("state", "")).upper() == "APPROVED", f"{gate_id}: GitHub review is not APPROVED")
+    require(review.get("commit_id") == current, f"{gate_id}: GitHub review is not anchored to exact tested commit")
+
+    body = review.get("body")
+    require(isinstance(body, str) and body.strip(), f"{gate_id}: GitHub review body attestation required")
+    expected_body_sha = sha256_field(proof, "review_body_sha256", f"{gate_id} evidence")
+    actual_body_sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    require(hmac.compare_digest(actual_body_sha, expected_body_sha),
+            f"{gate_id}: GitHub review body SHA-256 mismatch")
+    attestation = load_json_bytes(body.encode("utf-8"), f"{gate_id} GitHub review attestation")
+    require(isinstance(attestation, dict), f"{gate_id}: GitHub review body must be a JSON attestation")
+    require(attestation.get("schema_version") == 1, f"{gate_id}: review attestation schema mismatch")
+    require(attestation.get("gate_id") == gate_id, f"{gate_id}: review attestation gate mismatch")
+    require(attestation.get("tested_commit") == current, f"{gate_id}: review attestation commit mismatch")
+    require(str(attestation.get("report_sha256", "")).lower() == digest.lower(),
+            f"{gate_id}: review attestation report digest mismatch")
+    require(attestation.get("decision") == "approve", f"{gate_id}: review attestation decision must be approve")
+
+
+def validate_external_evidence(evidence_path: Path, current: str, gates: dict, review_fetcher=None) -> None:
     contract = gates.get("evidence_contract", {})
     require(contract.get("hash_algorithm") == "sha256", "unsupported evidence hash contract")
     manifest_limit = int(contract.get("max_manifest_bytes", 0))
@@ -314,19 +387,7 @@ def validate_external_evidence(evidence_path: Path, current: str, gates: dict) -
         require(report.get("gate_id") == gate_id, f"{gate_id}: report gate ID mismatch")
         require(report.get("tested_commit") == current, f"{gate_id}: stale/wrong report commit")
         require(report.get("result") == "pass", f"{gate_id}: report result is not pass")
-        performer = report.get("performed_by")
-        reviewer = proof.get("reviewed_by")
-        require(isinstance(performer, str) and performer.strip(), f"{gate_id}: performed_by required")
-        require(isinstance(reviewer, str) and reviewer.strip(), f"{gate_id}: reviewed_by required")
-        require(reviewer.strip().casefold() != performer.strip().casefold(), f"{gate_id}: independent reviewer required")
-        require(proof.get("reviewed_report_sha256", "").lower() == digest.lower(),
-                f"{gate_id}: reviewer binding must name exact report digest")
-        require(proof.get("reviewed_commit") == current,
-                f"{gate_id}: reviewer binding must name exact tested commit")
-        require(proof.get("review_decision") == "approve",
-                f"{gate_id}: reviewer decision must be approve")
-        require(isinstance(proof.get("review_reference"), str) and proof["review_reference"].strip(),
-                f"{gate_id}: immutable external review reference required")
+        validate_review_binding(gate_id, proof, report, digest, current, review_fetcher)
         validate_gate_semantics(gate_id, report, current)
         reports[gate_id] = report
     validate_cross_gate_bindings(reports, current)

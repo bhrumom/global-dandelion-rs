@@ -216,3 +216,10 @@ valid controlled-cutover report after changing only its binary digest and confir
 that the cross-gate verifier rejects it. Any earlier cutover candidate remains
 historical; the next candidate must be produced from the exact artifact of the new
 final HEAD after its current-ci run succeeds.
+
+
+## Acceptance reviewer identity hardening
+
+A follow-up exact-HEAD audit found that evidence contract v1 only required `review_reference` to be a non-empty string and compared `reviewed_by` with the execution-context string. That was insufficient to prove an independent external review.
+
+Evidence contract v2 now adds `performed_actor`, pins `review_body_sha256`, restricts review references to GitHub PR review API URLs, re-fetches the live review during real `--require-complete` verification, requires `APPROVED` on the exact tested commit, and parses the review body as a digest/commit/gate-bound JSON attestation. Synthetic self-tests cover forged reference and edited review body negatives. This commit intentionally invalidates predecessor exact-HEAD CI/artifact evidence; fresh CI and fresh artifact/cutover evidence are required.

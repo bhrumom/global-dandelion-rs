@@ -11,9 +11,9 @@ from check_parity import ROOT, validate_external_evidence
 gates = json.loads((ROOT / "docs/acceptance-gates.json").read_text())
 current = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
 
-def expect_failure(path: Path, message: str) -> None:
+def expect_failure(path: Path, message: str, review_fetcher) -> None:
     try:
-        validate_external_evidence(path, current, gates)
+        validate_external_evidence(path, current, gates, review_fetcher=review_fetcher)
     except RuntimeError:
         return
     raise RuntimeError(f"evidence verifier accepted invalid case: {message}")
@@ -24,7 +24,8 @@ def report_for(gate_id: str) -> dict:
         "gate_id": gate_id,
         "tested_commit": current,
         "result": "pass",
-        "performed_by": f"synthetic-executor:{gate_id}",
+        "performed_by": f"synthetic-runner:{gate_id}",
+        "performed_actor": f"synthetic-executor:{gate_id}",
     }
     if gate_id == "current-ci":
         base.update({
@@ -149,7 +150,8 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
     root = Path(directory)
     proof = {"schema_version": gates["evidence_contract"]["schema_version"], "tested_commit": current, "gates": {}}
     report_paths = {}
-    for gate in gates["required_gates"]:
+    review_records = {}
+    for index, gate in enumerate(gates["required_gates"], start=1):
         gate_id = gate["id"]
         report = report_for(gate_id)
         path = root / f"{gate_id}.json"
@@ -157,46 +159,75 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
         path.write_bytes(raw)
         digest = hashlib.sha256(raw).hexdigest()
         report_paths[gate_id] = path
+        reviewer = f"synthetic-reviewer:{gate_id}"
+        reference = f"https://api.github.com/repos/example/dandelion/pulls/1/reviews/{index}"
+        attestation = json.dumps({
+            "schema_version": 1,
+            "gate_id": gate_id,
+            "tested_commit": current,
+            "report_sha256": digest,
+            "decision": "approve",
+        }, sort_keys=True)
+        review_records[reference] = {
+            "id": index,
+            "state": "APPROVED",
+            "commit_id": current,
+            "user": {"login": reviewer},
+            "body": attestation,
+        }
         proof["gates"][gate_id] = {
             "gate_id": gate_id,
             "result": "pass",
             "report": path.name,
             "report_sha256": digest,
-            "reviewed_by": f"synthetic-reviewer:{gate_id}",
+            "reviewed_by": reviewer,
             "reviewed_report_sha256": digest,
             "reviewed_commit": current,
             "review_decision": "approve",
-            "review_reference": f"synthetic://review/{gate_id}/{digest}",
+            "review_reference": reference,
+            "review_body_sha256": hashlib.sha256(attestation.encode()).hexdigest(),
         }
+    def fetch_review(reference):
+        return review_records[reference]
     manifest = root / "manifest.json"
     manifest.write_text(json.dumps(proof, indent=2) + "\n")
-    validate_external_evidence(manifest, current, gates)
+    validate_external_evidence(manifest, current, gates, review_fetcher=fetch_review)
 
     first = gates["required_gates"][0]["id"]
     saved = report_paths[first].read_bytes()
     report_paths[first].write_bytes(saved + b" ")
-    expect_failure(manifest, "tampered report with stale digest")
+    expect_failure(manifest, "tampered report with stale digest", fetch_review)
     report_paths[first].write_bytes(saved)
 
     self_review = copy.deepcopy(proof)
-    self_review["gates"][first]["reviewed_by"] = f"synthetic-executor:{first}"
+    self_review["gates"][first]["reviewed_by"] = report_for(first)["performed_actor"]
     manifest.write_text(json.dumps(self_review, indent=2) + "\n")
-    expect_failure(manifest, "performer reviewed own gate")
+    expect_failure(manifest, "performer reviewed own gate", fetch_review)
 
     missing_report = copy.deepcopy(proof)
     del missing_report["gates"][first]["report"]
     manifest.write_text(json.dumps(missing_report, indent=2) + "\n")
-    expect_failure(manifest, "manifest-only pass without report")
+    expect_failure(manifest, "manifest-only pass without report", fetch_review)
 
     wrong_gate = copy.deepcopy(proof)
     wrong_gate["gates"][first]["gate_id"] = "wrong-gate"
     manifest.write_text(json.dumps(wrong_gate, indent=2) + "\n")
-    expect_failure(manifest, "gate ID mismatch")
+    expect_failure(manifest, "gate ID mismatch", fetch_review)
 
     wrong_review_digest = copy.deepcopy(proof)
     wrong_review_digest["gates"][first]["reviewed_report_sha256"] = "0" * 64
     manifest.write_text(json.dumps(wrong_review_digest, indent=2) + "\n")
-    expect_failure(manifest, "reviewer did not bind exact report digest")
+    expect_failure(manifest, "reviewer did not bind exact report digest", fetch_review)
+
+    forged_reference = copy.deepcopy(proof)
+    forged_reference["gates"][first]["review_reference"] = "synthetic://forged-review"
+    manifest.write_text(json.dumps(forged_reference, indent=2) + "\n")
+    expect_failure(manifest, "non-GitHub review reference", fetch_review)
+
+    edited_review = copy.deepcopy(proof)
+    edited_review["gates"][first]["review_body_sha256"] = "0" * 64
+    manifest.write_text(json.dumps(edited_review, indent=2) + "\n")
+    expect_failure(manifest, "edited GitHub review body", fetch_review)
 
     hotspot = "physical-hotspot"
     strong_hotspot = report_paths[hotspot].read_bytes()
@@ -209,7 +240,7 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
     weak_proof["gates"][hotspot]["report_sha256"] = weak_digest
     weak_proof["gates"][hotspot]["reviewed_report_sha256"] = weak_digest
     manifest.write_text(json.dumps(weak_proof, indent=2) + "\n")
-    expect_failure(manifest, "generic pass report bypassed gate-specific semantics")
+    expect_failure(manifest, "generic pass report bypassed gate-specific semantics", fetch_review)
     report_paths[hotspot].write_bytes(strong_hotspot)
 
     cutover = "controlled-cutover"
@@ -222,7 +253,7 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
     mismatch_proof["gates"][cutover]["report_sha256"] = mismatch_digest
     mismatch_proof["gates"][cutover]["reviewed_report_sha256"] = mismatch_digest
     manifest.write_text(json.dumps(mismatch_proof, indent=2) + "\n")
-    expect_failure(manifest, "controlled cutover used a different binary than current-ci")
+    expect_failure(manifest, "controlled cutover used a different binary than current-ci", fetch_review)
 
 print(json.dumps({
     "evidence_contract": "pass",
