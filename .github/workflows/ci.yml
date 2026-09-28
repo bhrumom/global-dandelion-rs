@@ -1,0 +1,109 @@
+name: Rust CLI Quality
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rust-cli-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: '2'
+  CARGO_INCREMENTAL: '0'
+  RUST_BACKTRACE: '1'
+jobs:
+  quality:
+    name: Quality / ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Storage preflight
+        run: python3 scripts/disk_guard.py --planned-bytes 6442450944
+      - name: Pinned Rust toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          key: core-${{ matrix.target }}
+          cache-on-failure: true
+      - name: Formatting and architecture
+        run: |
+          cargo fmt --all -- --check
+          python3 scripts/check_architecture.py
+          python3 scripts/check_parity.py
+      - name: Clippy
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Unit, property, integration and CLI tests
+        run: cargo test --locked --workspace --all-features
+      - name: Runnable CLI and process acceptance
+        run: |
+          cargo build --locked -p dandelion-app
+          python3 scripts/acceptance.py --binary target/debug/dandelion > acceptance-${{ matrix.target }}.json
+          cat acceptance-${{ matrix.target }}.json
+      - name: Release storage preflight
+        run: python3 scripts/disk_guard.py --planned-bytes 3221225472
+      - name: Build reproducible-input release artifact
+        run: |
+          cargo build --locked --release -p dandelion-app
+          target/release/dandelion self-test --json
+          mkdir -p dist
+          cp target/release/dandelion dist/
+          cp Cargo.lock dist/
+          { printf 'git_sha=%s\n' "$GITHUB_SHA"; rustc -Vv; cargo -V; } > dist/BUILD-INFO.txt
+          (cd dist && sha256sum dandelion Cargo.lock BUILD-INFO.txt > SHA256SUMS)
+          cp acceptance-${{ matrix.target }}.json dist/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dandelion-${{ matrix.target }}-${{ github.sha }}
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
+  dependencies:
+    name: Dependency policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Storage preflight
+        run: python3 scripts/disk_guard.py --planned-bytes 8589934592
+      - name: Pinned Rust toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          key: security-tools
+          cache-on-failure: true
+      - name: Install audit tools on disposable runner only
+        run: |
+          cargo install cargo-audit --version 0.21.2 --locked
+          cargo install cargo-deny --version 0.20.2 --locked
+      - name: Advisory and supply-chain gates
+        run: |
+          cargo audit
+          cargo deny --locked check
+  gate:
+    name: Required acceptance gate
+    if: always()
+    needs: [quality, dependencies]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: All required jobs must succeed
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          DEPENDENCIES: ${{ needs.dependencies.result }}
+        run: test "$QUALITY" = success && test "$DEPENDENCIES" = success

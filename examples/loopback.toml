@@ -1,0 +1,20 @@
+[runtime]
+queue_capacity = 32
+max_pipeline_bytes = 8388608
+shutdown_timeout_ms = 3000
+
+[scanner]
+roots = ["tests/fixtures"]
+chunk_bytes = 1152
+exclude_hidden = true
+max_depth = 64
+max_files = 1000000
+max_read_bytes = 268435456
+
+[pacing]
+bytes_per_second = 1048576
+burst_bytes = 1232
+traffic_limit_bytes = 67108864
+
+[transport]
+mode = "loopback"

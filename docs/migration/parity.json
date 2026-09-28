@@ -1,0 +1,623 @@
+{
+  "schema_version": 1,
+  "source_commit": "aa7f3720c42856f0e1d18742f78fba156227ee79",
+  "source_blob": "54bf6226eb80d1ef6c4f6087fb02579141ab134f",
+  "capabilities": [
+    {
+      "id": "time-metadata",
+      "symbols": [
+        "get_current_local_time",
+        "sync_network_time"
+      ],
+      "source_lines": [
+        26,
+        104
+      ],
+      "destination": "future telemetry",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Runtime uses monotonic clocks; network clock drift metadata is not implemented.",
+      "evidence": []
+    },
+    {
+      "id": "host-clock-mutation",
+      "symbols": [
+        "sync_network_time"
+      ],
+      "source_lines": [
+        30,
+        104
+      ],
+      "destination": "none",
+      "classification": "intentionally-removed",
+      "status": "removed",
+      "reason": "No automatic host clock/timezone modification.",
+      "evidence": [
+        "docs/adr/0001-first-vertical-slice.md"
+      ]
+    },
+    {
+      "id": "disk-partitions",
+      "symbols": [
+        "DiskPartition",
+        "linux_get_disk_partitions"
+      ],
+      "source_lines": [
+        123,
+        174
+      ],
+      "destination": "platform-linux",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Mount inventory and discovery not implemented.",
+      "evidence": []
+    },
+    {
+      "id": "disk-space",
+      "symbols": [
+        "DiskUsage",
+        "linux_get_disk_usage"
+      ],
+      "source_lines": [
+        131,
+        188
+      ],
+      "destination": "platform-linux",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Native statvfs plus reserve safety check; boundary/overflow tests.",
+      "evidence": [
+        "crates/dandelion-platform-linux/src/lib.rs",
+        "scripts/disk_guard.py"
+      ]
+    },
+    {
+      "id": "network-interfaces",
+      "symbols": [
+        "linux_get_net_interfaces",
+        "find_specific_interfaces"
+      ],
+      "source_lines": [
+        190,
+        566
+      ],
+      "destination": "platform-linux",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "No automatic interface selection or host network changes.",
+      "evidence": []
+    },
+    {
+      "id": "connections",
+      "symbols": [
+        "linux_get_net_connections",
+        "analyze_network_connections"
+      ],
+      "source_lines": [
+        246,
+        2941
+      ],
+      "destination": "platform-linux",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Read-only connection summaries remain pending.",
+      "evidence": []
+    },
+    {
+      "id": "structured-logging",
+      "symbols": [
+        "log_message",
+        "HeadlessLogPrinter"
+      ],
+      "source_lines": [
+        421,
+        2145
+      ],
+      "destination": "app",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Structured stderr tracing and separate stdout results.",
+      "evidence": [
+        "crates/dandelion-app/src/main.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ]
+    },
+    {
+      "id": "progress-ui",
+      "symbols": [
+        "create_progress_bar",
+        "StatusDisplayThread"
+      ],
+      "source_lines": [
+        430,
+        2433
+      ],
+      "destination": "future tui",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Snapshot-driven TUI not implemented; headless output is available.",
+      "evidence": []
+    },
+    {
+      "id": "live-speed-stats",
+      "symbols": [
+        "update_speed_stats",
+        "format_speed",
+        "_get_instantaneous_speed",
+        "get_worker_speed",
+        "get_category_speeds",
+        "cleanup_inactive_speed_stats"
+      ],
+      "source_lines": [
+        437,
+        545
+      ],
+      "destination": "future telemetry",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Final per-run totals are available; live per-worker/category speed presentation remains pending.",
+      "evidence": []
+    },
+    {
+      "id": "day-night-pacing",
+      "symbols": [
+        "_apply_speed_level",
+        "TimeBasedPacerThread"
+      ],
+      "source_lines": [
+        571,
+        643
+      ],
+      "destination": "pacing",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Constant rate token bucket exists; wall-clock profile scheduling is not implemented.",
+      "evidence": []
+    },
+    {
+      "id": "constant-rate",
+      "symbols": [
+        "_apply_speed_level",
+        "send_chunk_in_batches"
+      ],
+      "source_lines": [
+        571,
+        2974
+      ],
+      "destination": "pacing",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Monotonic integer token bucket with deterministic paused-time tests.",
+      "evidence": [
+        "crates/dandelion-pacing/src/lib.rs",
+        "crates/dandelion-app/src/supervisor.rs"
+      ]
+    },
+    {
+      "id": "surface-scan",
+      "symbols": [
+        "ThrottledSurfaceScanThread"
+      ],
+      "source_lines": [
+        648,
+        758
+      ],
+      "destination": "future compatibility scanner",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "No automatic whole-drive surface reading.",
+      "evidence": []
+    },
+    {
+      "id": "metadata-scan",
+      "symbols": [
+        "MetadataScanThread"
+      ],
+      "source_lines": [
+        763,
+        846
+      ],
+      "destination": "scanner",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "One-pass selected-root traversal exists; drive-based continuous metadata job remains pending.",
+      "evidence": []
+    },
+    {
+      "id": "hotspot",
+      "symbols": [
+        "HotspotDataBroadcaster"
+      ],
+      "source_lines": [
+        852,
+        1286
+      ],
+      "destination": "future hotspot capability",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Privileged hotspot lifecycle and broadcast have not been implemented.",
+      "evidence": []
+    },
+    {
+      "id": "release-version",
+      "symbols": [
+        "_parse_version"
+      ],
+      "source_lines": [
+        1296,
+        1319
+      ],
+      "destination": "future updater",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Package version exists; update channel selection is pending.",
+      "evidence": []
+    },
+    {
+      "id": "updater",
+      "symbols": [
+        "AutoUpdateThread"
+      ],
+      "source_lines": [
+        1321,
+        1587
+      ],
+      "destination": "future signed updater",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "No self-overwrite, git checkout of running source, or auto restart.",
+      "evidence": []
+    },
+    {
+      "id": "rename-effect",
+      "symbols": [
+        "RenamerThread",
+        "restore_interrupted_files"
+      ],
+      "source_lines": [
+        1593,
+        2992
+      ],
+      "destination": "future optional journaled compatibility",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Disabled/absent; must not modify user filenames.",
+      "evidence": []
+    },
+    {
+      "id": "loopback-send",
+      "symbols": [
+        "LoopbackSenderThread"
+      ],
+      "source_lines": [
+        1657,
+        1809
+      ],
+      "destination": "transport",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Real owned UDP loopback sockets; finite selected-root pipeline. Throughput comparison pending.",
+      "evidence": [
+        "crates/dandelion-transport/src/lib.rs",
+        "crates/dandelion-app/src/supervisor.rs",
+        "scripts/acceptance.py"
+      ]
+    },
+    {
+      "id": "loopback-receive",
+      "symbols": [
+        "LoopbackReceiverThread"
+      ],
+      "source_lines": [
+        1812,
+        1912
+      ],
+      "destination": "transport",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Decode/checksum/exact-byte verification replaces blind discard.",
+      "evidence": [
+        "crates/dandelion-transport/src/lib.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ]
+    },
+    {
+      "id": "private-vps",
+      "symbols": [
+        "VpsSenderThread"
+      ],
+      "source_lines": [
+        1918,
+        2060
+      ],
+      "destination": "future authorized transport",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Explicit target policy and private transport come after green first slice.",
+      "evidence": []
+    },
+    {
+      "id": "lan",
+      "symbols": [
+        "ForcedNetworkScanThread"
+      ],
+      "source_lines": [
+        2063,
+        2121
+      ],
+      "destination": "future authorized LAN transport",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "No implicit transmission to discovered devices.",
+      "evidence": []
+    },
+    {
+      "id": "startup-drive-scan",
+      "symbols": [
+        "StartupDriveScanner"
+      ],
+      "source_lines": [
+        2435,
+        2465
+      ],
+      "destination": "future drive observer",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Only explicitly configured source roots are read.",
+      "evidence": []
+    },
+    {
+      "id": "external-drive-monitor",
+      "symbols": [
+        "ExternalDriveMonitorThread"
+      ],
+      "source_lines": [
+        2471,
+        2639
+      ],
+      "destination": "future drive observer",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Mount/unmount lifecycle not implemented.",
+      "evidence": []
+    },
+    {
+      "id": "source-scan",
+      "symbols": [
+        "FileScannerThread"
+      ],
+      "source_lines": [
+        2641,
+        2715
+      ],
+      "destination": "scanner",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Finite bounded read-only traversal; hidden/duplicate/symlink/non-UTF-8 tests.",
+      "evidence": [
+        "crates/dandelion-scanner/src/lib.rs",
+        "crates/dandelion-platform-linux/src/lib.rs",
+        "crates/dandelion-app/src/supervisor.rs"
+      ]
+    },
+    {
+      "id": "chunk-framing",
+      "symbols": [
+        "FileScannerThread.process_file"
+      ],
+      "source_lines": [
+        2686,
+        2715
+      ],
+      "destination": "packet",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Versioned BLAKE3 frame with metadata integrity; empty files represented. Legacy framing is not compatible.",
+      "evidence": [
+        "crates/dandelion-packet/src/lib.rs",
+        "docs/protocol-v2.md"
+      ]
+    },
+    {
+      "id": "wan-workers",
+      "symbols": [
+        "ChunkSenderWorker"
+      ],
+      "source_lines": [
+        2717,
+        2793
+      ],
+      "destination": "future authorized transport",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "WAN unsupported until explicit authorization and policy tests.",
+      "evidence": []
+    },
+    {
+      "id": "worker-explosion",
+      "symbols": [
+        "WorkerManagerThread"
+      ],
+      "source_lines": [
+        2795,
+        2826
+      ],
+      "destination": "Supervisor",
+      "classification": "intentionally-removed",
+      "status": "removed",
+      "reason": "CPU_COUNT * 50 and dynamic thread storms replaced by fixed runtime and bounded queue.",
+      "evidence": [
+        "crates/dandelion-app/src/supervisor.rs",
+        "crates/dandelion-app/src/main.rs",
+        "docs/adr/0001-first-vertical-slice.md"
+      ]
+    },
+    {
+      "id": "shutdown",
+      "symbols": [
+        "graceful_shutdown"
+      ],
+      "source_lines": [
+        2831,
+        2840
+      ],
+      "destination": "Supervisor",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Signal handling, queue close before join, cancellation during stalls and typed timeout.",
+      "evidence": [
+        "crates/dandelion-app/src/supervisor.rs",
+        "crates/dandelion-app/src/main.rs",
+        "scripts/acceptance.py"
+      ]
+    },
+    {
+      "id": "state",
+      "symbols": [
+        "load_state",
+        "save_state"
+      ],
+      "source_lines": [
+        2842,
+        2869
+      ],
+      "destination": "future state",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Persistent versioned state/crash-safe writes and legacy importer not implemented.",
+      "evidence": []
+    },
+    {
+      "id": "country-metadata",
+      "symbols": [
+        "load_country_database"
+      ],
+      "source_lines": [
+        2871,
+        2893
+      ],
+      "destination": "future optional metadata importer",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "No country-based destination generation or metadata importer.",
+      "evidence": []
+    },
+    {
+      "id": "random-public-targets",
+      "symbols": [
+        "generate_ip_from_cidr",
+        "prepare_target_ip_pool"
+      ],
+      "source_lines": [
+        2895,
+        2955
+      ],
+      "destination": "none",
+      "classification": "intentionally-removed",
+      "status": "removed",
+      "reason": "Random unsolicited public traffic is intentionally not ported.",
+      "evidence": [
+        "docs/adr/0001-first-vertical-slice.md",
+        "crates/dandelion-config/src/lib.rs",
+        "crates/dandelion-transport/src/lib.rs"
+      ]
+    },
+    {
+      "id": "target-health",
+      "symbols": [
+        "check_internet_connectivity"
+      ],
+      "source_lines": [
+        2908,
+        2914
+      ],
+      "destination": "future transport health",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "No arbitrary connectivity probes; target-specific health comes with authorized external transport.",
+      "evidence": []
+    },
+    {
+      "id": "neighbour-discovery",
+      "symbols": [
+        "scan_network_devices"
+      ],
+      "source_lines": [
+        2916,
+        2932
+      ],
+      "destination": "future read-only observer",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Discovery must not automatically authorize traffic.",
+      "evidence": []
+    },
+    {
+      "id": "target-policy",
+      "symbols": [
+        "prepare_target_ip_pool"
+      ],
+      "source_lines": [
+        2943,
+        2955
+      ],
+      "destination": "future config/policy",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Only owned loopback sockets are possible; external allowlist is not yet implemented.",
+      "evidence": []
+    },
+    {
+      "id": "batch-send",
+      "symbols": [
+        "send_chunk_in_batches"
+      ],
+      "source_lines": [
+        2957,
+        2974
+      ],
+      "destination": "future optimized transport",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Stop-and-verify correctness adapter exists; no batching optimization claimed.",
+      "evidence": []
+    },
+    {
+      "id": "wire-budget",
+      "symbols": [
+        "ChunkSenderWorker"
+      ],
+      "source_lines": [
+        2717,
+        2793
+      ],
+      "destination": "core + Supervisor",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Full datagram budget reservations, positive limits, exact cap and overflow tests.",
+      "evidence": [
+        "crates/dandelion-core/src/lib.rs",
+        "crates/dandelion-app/src/supervisor.rs"
+      ]
+    },
+    {
+      "id": "orchestration",
+      "symbols": [
+        "main"
+      ],
+      "source_lines": [
+        2997,
+        3165
+      ],
+      "destination": "app",
+      "classification": "redesigned",
+      "status": "implemented",
+      "reason": "Native Rust CLI with lifecycle owner, injection boundary and no Python runtime.",
+      "evidence": [
+        "crates/dandelion-app/src/main.rs",
+        "crates/dandelion-app/src/supervisor.rs",
+        "crates/dandelion-app/tests/cli.rs"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+[package]
+name = "dandelion-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "dandelion"
+path = "src/main.rs"
+
+[dependencies]
+dandelion-core.workspace = true
+dandelion-config.workspace = true
+dandelion-scanner.workspace = true
+dandelion-packet.workspace = true
+dandelion-pacing.workspace = true
+dandelion-transport.workspace = true
+dandelion-platform-linux.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+toml.workspace = true

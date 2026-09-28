@@ -964,3 +964,35 @@ That vertical slice must prove:
 - benchmark wiring.
 
 Only after that slice is green should additional feature domains be migrated.
+
+
+## 35. Implementation record: 2026-09-28 first Rust CLI slice
+
+The first native implementation uses eight concrete packages: app, core, config,
+scanner, packet, pacing, transport and platform-linux. It implements the minimum
+vertical slice specified in section 34. See ADR 0001 for the exact dependency
+topology, packet format, Linux capability boundary and bounded runtime decisions.
+There are no placeholder packages or fake success commands for later phases.
+
+Implemented code: standard clap CLI; layered validated TOML configuration; finite
+read-only scanner; bounded channel; BLAKE3-covered packet v2; monotonic integer
+token bucket; positive per-run wire budget; owned real UDP loopback verification;
+Supervisor cancellation/exception cleanup; tracing/JSON outputs and deterministic
+exit codes. The Linux adapter supports secure beneath-root file opens and storage
+reserve checking. It does not yet implement drive or network lifecycle discovery.
+
+Quality infrastructure: x86_64/aarch64 native Actions jobs, formatting/Clippy/unit/
+property/integration/CLI tests, stalled-consumer cancellation and RSS sampling,
+source immutability, dependency auditing/licensing policy, architecture and parity
+ledger checks, and checksummed build artifacts with toolchain/commit metadata.
+The existence of these jobs is not evidence of success: inspect the exact run SHA.
+
+The canonical ledger now separates classification from implementation state and
+links evidence files. Full baseline/cutover performance gates remain open. LAN,
+VPS/WAN authorization, persistent state/resume, drive monitoring, hotspot, TUI,
+automatic updating and legacy compatibility are pending. No claim of complete
+Python migration or numerical performance improvement is made by this slice.
+
+Storage is a non-negotiable operational constraint: estimate peak writes on each
+filesystem, preserve at least max(1 GiB, 5% capacity), and stop when information is
+missing or reserve cannot be maintained. Heavy builds/testing belong in CI.
