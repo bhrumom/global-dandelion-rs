@@ -120,3 +120,26 @@ are never accepted as real hotspot/hotplug/cutover/release-trust evidence.
 The commit containing this record still requires exact-revision CI. Physical Wi-Fi
 hotspot, physical hotplug, controlled cutover and production release trust remain
 external gates and must not be marked passed without independently reviewed reports.
+
+
+## Exact-head artifact provenance repair
+
+A real acceptance-host inspection of workflow run 36452638250 found that GitHub's
+pull-request run metadata reported head_sha
+e78a9bd506726450b5f53c009f4e269acf4a75c5 while the extracted aarch64 artifact's
+checksummed BUILD-INFO.txt recorded git_sha
+da5837c4d524b7120eda8b80982bc1c547fde23a, the synthetic pull-request merge commit.
+Therefore that otherwise-green run and its artifacts are not accepted as exact-head
+evidence for e78a9bd. No controlled-cutover pass is claimed from them.
+
+The CI workflow now derives TESTED_COMMIT from pull_request.head.sha for pull-request
+runs (or github.sha otherwise), explicitly checks out that revision in every job,
+verifies git rev-parse HEAD before testing, records TESTED_COMMIT in BUILD-INFO.txt,
+and names artifacts with the same commit. The controlled-cutover harness additionally
+requires the extracted artifact BUILD-INFO.txt and rejects any git_sha that differs
+from the tested commit, so workflow metadata alone cannot mis-bind a binary.
+
+On acceptance host bhrum2, the negative provenance check was exercised against the
+old artifact and correctly failed with the synthetic-merge BUILD-INFO SHA mismatch.
+The next exact-head CI run and artifact must complete successfully before current-ci
+or controlled-cutover candidate evidence can advance.
