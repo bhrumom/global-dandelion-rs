@@ -43,3 +43,26 @@ hashes. Raw repetitions include encoding elapsed time and GNU-time CPU/peak RSS.
 The report is checksummed in each artifact. It is not a full scanner/network/drive
 cutover comparison; shared-runner values and 0.01-second CPU resolution are explicit.
 No side-effectful Python module is imported or run.
+
+
+## Controlled same-host cutover harness
+
+`scripts/controlled_cutover.py` is the operator-facing harness for the
+`controlled-cutover` external gate. It verifies the exact pinned Python Git blob,
+never imports or executes the legacy module's normal main function, and reproduces
+only reviewed side-effect-free scan/read/legacy-loopback expressions on synthetic
+local fixtures. It alternates Python/Rust order and records raw wall time, user/system
+CPU, peak RSS, dataset throughput and repeated SIGTERM settlement distributions.
+
+The harness requires both `--tested-commit` and `--artifact-head-commit`; these
+must be the same full SHA so candidate evidence cannot be detached from the workflow
+head that produced the tested artifact. Wire contracts are reported separately:
+the Python baseline uses the pinned u32be+MD5 UDP packet expression while Rust uses
+protocol v2 and verified local receipts. That difference must not be presented as
+identical wire work or as a universal Rust/Python speedup claim.
+
+A successful harness run is only **candidate gate evidence**. The JSON report still
+must satisfy the repository evidence contract for the exact final commit and be
+validated by a distinct independent reviewer through the external evidence manifest.
+Smoke runs on an older artifact, shared CI packet benchmarks, or self-review never
+make `controlled-cutover` pass.
