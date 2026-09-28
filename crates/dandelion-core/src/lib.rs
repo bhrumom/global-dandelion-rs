@@ -1,4 +1,6 @@
 //! Platform-independent transfer values and failure semantics.
+pub mod filesystem;
+
 use serde::Serialize;
 use std::{io, path::PathBuf};
 use thiserror::Error;

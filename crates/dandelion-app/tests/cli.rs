@@ -50,3 +50,21 @@ fn selftest_uses_real_pipeline_and_clean_json_stdout() {
     assert_eq!(json["files_completed"], 2);
     assert_eq!(json["status"], "completed");
 }
+
+#[test]
+fn closed_stdout_pipe_is_a_normal_cli_exit() {
+    use std::process::Stdio;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_dandelion"))
+        .args(["completions", "bash"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take());
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

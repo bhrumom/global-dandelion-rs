@@ -10,11 +10,11 @@ workspace = true
 
 [dependencies]
 dandelion-core.workspace = true
-dandelion-platform-linux.workspace = true
 walkdir.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 
 [dev-dependencies]
+dandelion-platform-linux.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 tempfile.workspace = true

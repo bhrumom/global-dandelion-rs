@@ -1,5 +1,7 @@
 # Global Dandelion RS
 
+[Chinese documentation / README.zh-CN](README.zh-CN.md)
+
 A Linux-first, unprivileged Rust CLI rearchitecture of `global_dandelion.py`.
 The executable is **`dandelion`**, not a Python wrapper.
 
@@ -16,8 +18,20 @@ Requirements: Linux kernel 5.6+ (`openat2`), an x86_64 or aarch64 host, and Rust
 1.98.1 when building from source. No root privileges are required.
 
 Prefer the binary artifacts from a **successful** `Rust CLI Quality` Actions run.
-Each includes `dandelion`, `Cargo.lock`, `BUILD-INFO.txt` and `SHA256SUMS`.
-Verify the checksum before use: `sha256sum --check SHA256SUMS`.
+Each includes a platform-specific `.tar.gz` and its `.sha256` file.
+Verify the outer archive first, extract it, then verify `SHA256SUMS` inside.
+The tar archive preserves the executable permission of `dandelion`; it also
+contains `Cargo.lock`, `BUILD-INFO.txt` and the acceptance result.
+For example, after downloading and unpacking the GitHub artifact ZIP:
+
+```sh
+sha256sum --check dandelion-x86_64-unknown-linux-gnu.tar.gz.sha256
+mkdir dandelion-bin
+tar -xzf dandelion-x86_64-unknown-linux-gnu.tar.gz -C dandelion-bin
+cd dandelion-bin
+sha256sum --check SHA256SUMS
+./dandelion self-test --json
+```
 Artifacts are CI builds, not a signed public release or a guarantee of bit-for-bit reproducibility.
 
 ```sh
@@ -80,11 +94,12 @@ CLI / configuration
 | `dandelion-transport` | Transport interface and real local UDP verifier |
 | `dandelion-platform-linux` | Kernel-bounded source opens and disk reserve checks |
 
-The core has no Tokio, CLI, Linux or socket dependency. Only the Linux adapter
-knows `openat2`/`statvfs`. This Linux-first scanner delegates file access to that
-adapter; its metadata identity uses device/inode/timestamps. Further portability
-requires a separately reviewed source-access port, not a silent fallback.
-No empty placeholder packages are created for unimplemented domains.
+The core has no Tokio, CLI, Linux or socket dependency. Filesystem access is
+inverted through `SourceAccess -> SourceRoot -> SourceFile` capability ports;
+the application injects the Linux implementation. The scanner does not depend
+on the concrete platform package in production. Only the Linux adapter knows
+`openat2`, `statvfs` and device/inode timestamp layouts. No empty placeholder
+packages are created for unimplemented domains.
 
 ## Safety and limits
 

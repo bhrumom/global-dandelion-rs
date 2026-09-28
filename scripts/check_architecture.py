@@ -12,7 +12,7 @@ ALLOWED = {
     "dandelion-packet": {"dandelion-core"},
     "dandelion-pacing": {"dandelion-core"},
     "dandelion-platform-linux": {"dandelion-core"},
-    "dandelion-scanner": {"dandelion-core", "dandelion-platform-linux"},
+    "dandelion-scanner": {"dandelion-core"},
     "dandelion-transport": {"dandelion-core", "dandelion-packet"},
     "dandelion-app": {"dandelion-core", "dandelion-config", "dandelion-packet", "dandelion-pacing",
                       "dandelion-platform-linux", "dandelion-scanner", "dandelion-transport"},

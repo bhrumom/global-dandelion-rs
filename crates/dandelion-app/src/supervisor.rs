@@ -40,6 +40,7 @@ impl Supervisor {
         getrandom::fill(&mut transfer_id)
             .map_err(|e| Error::Task(format!("OS random source: {e}")))?;
         let mut scanner = dandelion_scanner::start(
+            dandelion_platform_linux::LinuxSourceAccess,
             ScanOptions {
                 roots: cfg.scanner.roots.clone(),
                 chunk_bytes: cfg.scanner.chunk_bytes,

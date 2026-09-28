@@ -1,9 +1,56 @@
 //! Narrow, unprivileged Linux capabilities. No commands, shell, clock mutation,
 //! root requirement, or unsafe blocks. Secure source opens require Linux 5.6+.
+use dandelion_core::filesystem::{FileStamp, SourceAccess, SourceFile, SourceRoot};
 use dandelion_core::{Error, Result};
 use rustix::fs::{Mode, OFlags, ResolveFlags};
 use serde::Serialize;
 use std::{fs::File, path::Path};
+use std::{
+    io::{self, Read},
+    os::unix::fs::MetadataExt,
+};
+
+/// Unprivileged Linux implementation of the source-access port.
+pub struct LinuxSourceAccess;
+impl SourceAccess for LinuxSourceAccess {
+    type Root = SourceDirectory;
+    fn open_root(&self, path: &Path) -> Result<Self::Root> {
+        SourceDirectory::open(path)
+    }
+}
+
+pub struct LinuxSourceFile {
+    file: File,
+}
+impl Read for LinuxSourceFile {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.file.read(buffer)
+    }
+}
+impl SourceFile for LinuxSourceFile {
+    fn stamp(&self) -> Result<FileStamp> {
+        let m = self.file.metadata()?;
+        Ok(FileStamp {
+            len: m.len(),
+            change_token: [
+                i128::from(m.dev()),
+                i128::from(m.ino()),
+                i128::from(m.mtime()),
+                i128::from(m.mtime_nsec()),
+                i128::from(m.ctime()),
+                i128::from(m.ctime_nsec()),
+            ],
+        })
+    }
+}
+impl SourceRoot for SourceDirectory {
+    type File = LinuxSourceFile;
+    fn open_file(&self, relative: &Path) -> Result<Self::File> {
+        Ok(LinuxSourceFile {
+            file: self.open_regular(relative)?,
+        })
+    }
+}
 
 pub struct SourceDirectory {
     directory: File,

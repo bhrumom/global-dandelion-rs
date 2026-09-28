@@ -1,6 +1,6 @@
 # ADR 0001: bounded Linux-first correctness slice
 
-Status: accepted for first implementation; performance/cutover gates remain open.
+Status: accepted; filesystem dependency refined by ADR 0002. Performance/cutover gates remain open.
 Date: 2026-09-28.
 
 ## Decision

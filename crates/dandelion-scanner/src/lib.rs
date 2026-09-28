@@ -1,13 +1,8 @@
 //! One blocking producer, one bounded queue. Directory entries are streamed,
 //! not collected/sorted into an unbounded list. Source files are never modified.
+use dandelion_core::filesystem::{SourceAccess, SourceFile, SourceRoot};
 use dandelion_core::{Chunk, Error, MAX_PAYLOAD_BYTES, Result};
-use dandelion_platform_linux::SourceDirectory;
-use std::{
-    fs::Metadata,
-    io::Read,
-    os::unix::{ffi::OsStrExt, fs::MetadataExt},
-    path::PathBuf,
-};
+use std::{io::Read, path::PathBuf};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use walkdir::WalkDir;
@@ -30,28 +25,18 @@ pub struct ScanSummary {
     pub skipped_entries: u64,
 }
 
-pub fn start(
+pub fn start<A: SourceAccess>(
+    access: A,
     options: ScanOptions,
     transfer_id: [u8; 16],
     output: mpsc::Sender<Chunk>,
     cancel: CancellationToken,
 ) -> JoinHandle<Result<ScanSummary>> {
-    tokio::task::spawn_blocking(move || scan(options, transfer_id, output, cancel))
+    tokio::task::spawn_blocking(move || scan(access, options, transfer_id, output, cancel))
 }
 
-fn fingerprint(m: &Metadata) -> (u64, u64, u64, i64, i64, i64, i64) {
-    (
-        m.dev(),
-        m.ino(),
-        m.len(),
-        m.mtime(),
-        m.mtime_nsec(),
-        m.ctime(),
-        m.ctime_nsec(),
-    )
-}
-
-fn scan(
+fn scan<A: SourceAccess>(
+    access: A,
     options: ScanOptions,
     transfer_id: [u8; 16],
     output: mpsc::Sender<Chunk>,
@@ -89,7 +74,7 @@ fn scan(
         if cancel.is_cancelled() {
             return Err(Error::Cancelled);
         }
-        let directory = SourceDirectory::open(&root)?;
+        let directory = access.open_root(&root)?;
         // max_open > max_depth avoids WalkDir's collect-to-close fallback.
         let walker = WalkDir::new(&root)
             .follow_links(false)
@@ -100,7 +85,7 @@ fn scan(
             .filter_entry(|entry| {
                 entry.depth() == 0
                     || ((!options.exclude_hidden
-                        || !entry.file_name().as_bytes().starts_with(b"."))
+                        || !entry.file_name().as_encoded_bytes().starts_with(b"."))
                         && !options
                             .excluded_names
                             .iter()
@@ -123,13 +108,11 @@ fn scan(
                 .path()
                 .strip_prefix(&root)
                 .map_err(|e| Error::Scan(e.to_string()))?;
-            let mut file = directory.open_regular(relative)?;
-            let before = file.metadata()?;
-            let walked = entry.metadata().map_err(|e| Error::Scan(e.to_string()))?;
-            if fingerprint(&before) != fingerprint(&walked) {
-                return Err(Error::SourceChanged(entry.path().into()));
-            }
-            if before.len() > options.max_read_bytes.saturating_sub(summary.payload_read) {
+            let mut file = directory.open_file(relative)?;
+            // Identity and metadata are sampled from the opened handle, not a
+            // second path lookup that could resolve to a different object.
+            let before = file.stamp()?;
+            if before.len > options.max_read_bytes.saturating_sub(summary.payload_read) {
                 return Err(Error::Scan("source read budget would be exceeded".into()));
             }
             let file_id = summary
@@ -142,7 +125,7 @@ fn scan(
                 if cancel.is_cancelled() {
                     return Err(Error::Cancelled);
                 }
-                let remaining = before.len() - offset;
+                let remaining = before.len - offset;
                 let length = remaining.min(options.chunk_bytes as u64) as usize;
                 let mut payload = vec![0; length];
                 if let Err(e) = file.read_exact(&mut payload) {
@@ -152,8 +135,8 @@ fn scan(
                     return Err(e.into());
                 }
                 offset += length as u64;
-                let last = offset == before.len();
-                if last && fingerprint(&before) != fingerprint(&file.metadata()?) {
+                let last = offset == before.len;
+                if last && before != file.stamp()? {
                     return Err(Error::SourceChanged(entry.path().into()));
                 }
                 // The supervisor MUST drop/close the receiver before joining us.
@@ -181,6 +164,7 @@ fn scan(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dandelion_platform_linux::LinuxSourceAccess;
     fn options(root: PathBuf) -> ScanOptions {
         ScanOptions {
             roots: vec![root],
@@ -202,7 +186,13 @@ mod tests {
         let mut config = options(dir.path().into());
         config.roots.push(dir.path().into());
         let (tx, mut rx) = mpsc::channel(1);
-        let worker = start(config, [1; 16], tx, CancellationToken::new());
+        let worker = start(
+            LinuxSourceAccess,
+            config,
+            [1; 16],
+            tx,
+            CancellationToken::new(),
+        );
         let mut chunks = Vec::new();
         while let Some(c) = rx.recv().await {
             chunks.push(c);
@@ -224,7 +214,13 @@ mod tests {
         std::fs::write(dir.path().join("data"), vec![1; 32768]).unwrap();
         let (tx, rx) = mpsc::channel(1);
         let cancel = CancellationToken::new();
-        let worker = start(options(dir.path().into()), [1; 16], tx, cancel.clone());
+        let worker = start(
+            LinuxSourceAccess,
+            options(dir.path().into()),
+            [1; 16],
+            tx,
+            cancel.clone(),
+        );
         tokio::time::sleep(std::time::Duration::from_millis(30)).await;
         assert!(rx.len() <= 1);
         assert!(!worker.is_finished());
@@ -248,6 +244,7 @@ mod tests {
         .unwrap();
         let (tx, mut rx) = mpsc::channel(1);
         let worker = start(
+            LinuxSourceAccess,
             options(dir.path().into()),
             [1; 16],
             tx,
@@ -256,5 +253,35 @@ mod tests {
         assert_eq!(rx.recv().await.unwrap().payload, b"x");
         assert!(rx.recv().await.is_none());
         assert_eq!(worker.await.unwrap().unwrap().files_read, 1);
+    }
+
+    #[tokio::test]
+    async fn source_shrink_never_emits_a_successful_terminal_chunk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data");
+        std::fs::write(&path, vec![7; 16384]).unwrap();
+        let (tx, mut rx) = mpsc::channel(1);
+        let worker = start(
+            LinuxSourceAccess,
+            options(dir.path().into()),
+            [1; 16],
+            tx,
+            CancellationToken::new(),
+        );
+        let first = rx.recv().await.unwrap();
+        assert!(!first.last);
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(0)
+            .unwrap();
+        while let Some(chunk) = rx.recv().await {
+            assert!(!chunk.last);
+        }
+        assert!(matches!(
+            worker.await.unwrap(),
+            Err(Error::SourceChanged(_))
+        ));
     }
 }

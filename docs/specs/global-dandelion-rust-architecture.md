@@ -996,3 +996,27 @@ Python migration or numerical performance improvement is made by this slice.
 Storage is a non-negotiable operational constraint: estimate peak writes on each
 filesystem, preserve at least max(1 GiB, 5% capacity), and stop when information is
 missing or reserve cannot be maintained. Heavy builds/testing belong in CI.
+
+First-slice hardening: stdout broken pipes are handled only at the output boundary,
+not used to hide transport I/O errors. Shell completions are generated into a
+bounded-size command-derived buffer before stdout writing. Added closed-pipe and
+source-shrink regression tests; an interrupted self-test preserves cancellation
+status rather than reclassifying cancellation as data corruption.
+
+First-slice dependency refinement (ADR 0002): SourceAccess/SourceRoot/SourceFile
+ports and opaque FileStamp live in core; the app injects LinuxSourceAccess. The
+scanner has no production dependency on platform-linux. Linux identity details
+and safe-open primitives remain entirely inside the adapter. Tests exercise the
+real adapter via dev dependencies. This supersedes ADR 0001's initial direct edge.
+
+Packaging refinement: pin maintained Node 24 checkout/upload Actions to verified
+commit SHAs. Package binaries inside tar.gz to preserve executable permissions
+through artifact ZIP transport; checksum both the archive and all inner evidence
+files. Build metadata records the actual Actions checkout revision.
+
+CI repair after run 36419586202: both native quality jobs passed, but the pinned
+cargo-audit 0.21.2 could not parse CVSS 4.0 entries in the current RustSec database.
+Upgrade to published cargo-audit 0.22.2 (lockfile auditing only, no binary-scanning
+feature needed), retaining audit as a mandatory gate. Separate advisory and
+license/source checks so both failures are visible. Add extraction, executable
+mode, inner checksum and packaged self-test checks before artifact upload.

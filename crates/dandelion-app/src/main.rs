@@ -12,8 +12,11 @@ use std::{
 use tokio_util::sync::CancellationToken;
 
 fn write_stdout(text: &str) -> Result<()> {
-    io::stdout().lock().write_all(text.as_bytes())?;
-    Ok(())
+    match io::stdout().lock().write_all(text.as_bytes()) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 fn json(value: &impl serde::Serialize) -> Result<()> {
     let text = serde_json::to_string(value).map_err(|e| Error::Task(e.to_string()))?;
@@ -125,6 +128,9 @@ fn execute(cli: &Cli) -> Result<u8> {
             let mut config = Config::default();
             config.scanner.roots.push(fixture.path().into());
             let stats = run(config.validate()?)?;
+            if stats.status != RunStatus::Completed {
+                return output_snapshot(stats, cli.json);
+            }
             if stats.verified_payload_bytes != 65537
                 || stats.files_completed != 2
                 || stats.status != RunStatus::Completed
@@ -144,7 +150,11 @@ fn execute(cli: &Cli) -> Result<u8> {
             Ok(0)
         }
         Command::Completions { shell } => {
-            clap_complete::generate(*shell, &mut Cli::command(), "dandelion", &mut io::stdout());
+            let mut buffer = Vec::new();
+            clap_complete::generate(*shell, &mut Cli::command(), "dandelion", &mut buffer);
+            let completion =
+                std::str::from_utf8(&buffer).map_err(|e| Error::Task(e.to_string()))?;
+            write_stdout(completion)?;
             Ok(0)
         }
     }
@@ -153,7 +163,6 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     match init_logging(&cli).and_then(|()| execute(&cli)) {
         Ok(code) => ExitCode::from(code),
-        Err(Error::Io(e)) if e.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
         Err(error) => {
             if cli.json {
                 eprintln!(

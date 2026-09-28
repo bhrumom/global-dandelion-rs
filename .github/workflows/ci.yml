@@ -28,7 +28,7 @@ jobs:
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - name: Storage preflight
@@ -63,12 +63,21 @@ jobs:
           cp target/release/dandelion dist/
           cp Cargo.lock dist/
           { printf 'git_sha=%s\n' "$GITHUB_SHA"; rustc -Vv; cargo -V; } > dist/BUILD-INFO.txt
-          (cd dist && sha256sum dandelion Cargo.lock BUILD-INFO.txt > SHA256SUMS)
           cp acceptance-${{ matrix.target }}.json dist/
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+          (cd dist && sha256sum dandelion Cargo.lock BUILD-INFO.txt acceptance-*.json > SHA256SUMS)
+          tar -czf dandelion-${{ matrix.target }}.tar.gz -C dist .
+          sha256sum dandelion-${{ matrix.target }}.tar.gz > dandelion-${{ matrix.target }}.tar.gz.sha256
+          mkdir package-check
+          tar -xzf dandelion-${{ matrix.target }}.tar.gz -C package-check
+          test -x package-check/dandelion
+          (cd package-check && sha256sum --check SHA256SUMS)
+          package-check/dandelion self-test --json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: dandelion-${{ matrix.target }}-${{ github.sha }}
-          path: dist/
+          path: |
+            dandelion-${{ matrix.target }}.tar.gz
+            dandelion-${{ matrix.target }}.tar.gz.sha256
           retention-days: 14
           if-no-files-found: error
   dependencies:
@@ -76,7 +85,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - name: Storage preflight
@@ -89,12 +98,13 @@ jobs:
           cache-on-failure: true
       - name: Install audit tools on disposable runner only
         run: |
-          cargo install cargo-audit --version 0.21.2 --locked
+          cargo install cargo-audit --version 0.22.2 --locked --no-default-features
           cargo install cargo-deny --version 0.20.2 --locked
-      - name: Advisory and supply-chain gates
-        run: |
-          cargo audit
-          cargo deny --locked check
+      - name: RustSec advisory audit
+        run: cargo audit
+      - name: Supply-chain and license policy
+        if: success() || failure()
+        run: cargo deny --locked check
   gate:
     name: Required acceptance gate
     if: always()
