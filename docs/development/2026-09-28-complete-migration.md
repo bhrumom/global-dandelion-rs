@@ -223,3 +223,21 @@ final HEAD after its current-ci run succeeds.
 A follow-up exact-HEAD audit found that evidence contract v1 only required `review_reference` to be a non-empty string and compared `reviewed_by` with the execution-context string. That was insufficient to prove an independent external review.
 
 Evidence contract v2 now adds `performed_actor`, pins `review_body_sha256`, restricts review references to GitHub PR review API URLs, re-fetches the live review during real `--require-complete` verification, requires `APPROVED` on the exact tested commit, and parses the review body as a digest/commit/gate-bound JSON attestation. Synthetic self-tests cover forged reference and edited review body negatives. This commit intentionally invalidates predecessor exact-HEAD CI/artifact evidence; fresh CI and fresh artifact/cutover evidence are required.
+
+
+## Acceptance reviewer scope hardening
+
+A continuation audit of evidence contract v2 found that its GitHub review URL parser
+accepted any repository and any pull request. An otherwise well-formed APPROVED review
+from a different repository or PR could therefore be replayed as a gate attestation.
+
+Evidence contract v3 adds a canonical `review_scope` bound to
+`bhrumom/global-dandelion-rs#1`. `check_parity.py` now rejects review URLs outside
+that exact repository/PR and additionally requires the live GitHub review
+`pull_request_url` to match the canonical API URL. Synthetic negative tests cover
+both a foreign repository and a different PR in the canonical repository.
+
+Advancing the branch for this verifier change makes run 36458183709 on predecessor
+`2bdf760e83880172be2ccb5548af84b1b2756d6f` historical for final current-ci
+purposes even if that run completes green. Full replacement remains false; fresh
+exact-HEAD CI and external hardware/cutover/release-trust evidence are still required.

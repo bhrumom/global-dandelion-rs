@@ -25,7 +25,7 @@
   ],
   "evidence_delivery": "Pass the independently reviewed external evidence manifest to scripts/check_parity.py --require-complete --evidence FILE. A manifest-only pass is insufficient; every gate report is re-read and digest/bindings/gate semantics are verified, and every reviewer attestation is re-fetched from the GitHub PR review API. GITHUB_TOKEN is optional for public repositories but recommended to avoid anonymous API rate limits.",
   "evidence_contract": {
-    "schema_version": 2,
+    "schema_version": 3,
     "hash_algorithm": "sha256",
     "max_manifest_bytes": 1048576,
     "max_report_bytes": 16777216,
@@ -49,7 +49,7 @@
       "performed_by",
       "performed_actor"
     ],
-    "reviewer_rule": "reviewed_by must match the live GitHub PR review actor and differ case-insensitively from both report.performed_actor and report.performed_by; the live review must be APPROVED on the exact tested commit and its JSON body attestation must bind gate ID, report SHA-256, tested commit and approve decision",
+    "reviewer_rule": "reviewed_by must match the live GitHub PR review actor and differ case-insensitively from both report.performed_actor and report.performed_by; the live review must be APPROVED on the exact tested commit, belong to evidence_contract.review_scope, and its JSON body attestation must bind gate ID, report SHA-256, tested commit and approve decision",
     "report_rule": "report must be a regular file opened without following symlinks; its SHA-256, gate_id, tested_commit, pass result and gate-specific semantic requirements must verify",
     "gate_specific_semantics": {
       "current-ci": [
@@ -92,6 +92,10 @@
         "staging, activation, health verification, rollback and post-rollback health verified"
       ]
     },
-    "review_reference_rule": "review_reference must be an https://api.github.com/repos/{owner}/{repo}/pulls/{pr}/reviews/{id} URL. Full-replacement verification re-fetches that review (using GITHUB_TOKEN when provided), verifies its numeric ID/state/commit/reviewer, and checks review_body_sha256 so edited/dismissed/stale reviews fail closed."
+    "review_reference_rule": "review_reference must exactly target the configured evidence_contract.review_scope repository and pull request using https://api.github.com/repos/{owner}/{repo}/pulls/{pr}/reviews/{id}. Full-replacement verification re-fetches that review, verifies numeric ID/state/commit/reviewer, requires the returned pull_request_url to match the configured scope, and checks review_body_sha256 so foreign-repository, foreign-PR, edited, dismissed or stale reviews fail closed.",
+    "review_scope": {
+      "repository": "bhrumom/global-dandelion-rs",
+      "pull_request": 1
+    }
   }
 }

@@ -309,7 +309,7 @@ def fetch_github_review(reference: str) -> dict:
     return review
 
 
-def validate_review_binding(gate_id, proof, report, digest, current, review_fetcher=None):
+def validate_review_binding(gate_id, proof, report, digest, current, review_scope, review_fetcher=None):
     performer = text_field(report, "performed_by", f"{gate_id} report")
     actor = text_field(report, "performed_actor", f"{gate_id} report")
     reviewer = text_field(proof, "reviewed_by", f"{gate_id} evidence")
@@ -325,9 +325,20 @@ def validate_review_binding(gate_id, proof, report, digest, current, review_fetc
     reference = text_field(proof, "review_reference", f"{gate_id} evidence")
     match = GITHUB_REVIEW_API.fullmatch(reference)
     require(match is not None, f"{gate_id}: review_reference must be an immutable GitHub PR review API URL")
+    scope = obj(review_scope, "evidence_contract.review_scope")
+    expected_repository = text_field(scope, "repository", "evidence_contract.review_scope")
+    expected_pr = positive_int_field(scope, "pull_request", "evidence_contract.review_scope")
+    referenced_repository = f"{match.group(1)}/{match.group(2)}"
+    require(referenced_repository.casefold() == expected_repository.casefold(),
+            f"{gate_id}: review_reference must target configured acceptance repository")
+    require(int(match.group(3)) == expected_pr,
+            f"{gate_id}: review_reference must target configured acceptance pull request")
     review = (review_fetcher or fetch_github_review)(reference)
     require(isinstance(review, dict), f"{gate_id}: review lookup must return an object")
     require(review.get("id") == int(match.group(4)), f"{gate_id}: external review ID mismatch")
+    expected_pull_url = f"https://api.github.com/repos/{match.group(1)}/{match.group(2)}/pulls/{expected_pr}"
+    require(review.get("pull_request_url") == expected_pull_url,
+            f"{gate_id}: GitHub review pull_request_url does not match configured acceptance scope")
     user = obj(review.get("user"), f"{gate_id} GitHub review user")
     login = text_field(user, "login", f"{gate_id} GitHub review user")
     require(login.casefold() == reviewer.casefold(), f"{gate_id}: reviewed_by does not match GitHub review actor")
@@ -353,6 +364,9 @@ def validate_review_binding(gate_id, proof, report, digest, current, review_fetc
 def validate_external_evidence(evidence_path: Path, current: str, gates: dict, review_fetcher=None) -> None:
     contract = gates.get("evidence_contract", {})
     require(contract.get("hash_algorithm") == "sha256", "unsupported evidence hash contract")
+    review_scope = obj(contract.get("review_scope"), "evidence_contract.review_scope")
+    text_field(review_scope, "repository", "evidence_contract.review_scope")
+    positive_int_field(review_scope, "pull_request", "evidence_contract.review_scope")
     manifest_limit = int(contract.get("max_manifest_bytes", 0))
     report_limit = int(contract.get("max_report_bytes", 0))
     raw = read_bounded_regular(evidence_path, manifest_limit, "evidence manifest")
@@ -387,7 +401,7 @@ def validate_external_evidence(evidence_path: Path, current: str, gates: dict, r
         require(report.get("gate_id") == gate_id, f"{gate_id}: report gate ID mismatch")
         require(report.get("tested_commit") == current, f"{gate_id}: stale/wrong report commit")
         require(report.get("result") == "pass", f"{gate_id}: report result is not pass")
-        validate_review_binding(gate_id, proof, report, digest, current, review_fetcher)
+        validate_review_binding(gate_id, proof, report, digest, current, review_scope, review_fetcher)
         validate_gate_semantics(gate_id, report, current)
         reports[gate_id] = report
     validate_cross_gate_bindings(reports, current)

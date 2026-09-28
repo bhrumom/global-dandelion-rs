@@ -151,6 +151,9 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
     proof = {"schema_version": gates["evidence_contract"]["schema_version"], "tested_commit": current, "gates": {}}
     report_paths = {}
     review_records = {}
+    review_scope = gates["evidence_contract"]["review_scope"]
+    review_repository = review_scope["repository"]
+    review_pr = review_scope["pull_request"]
     for index, gate in enumerate(gates["required_gates"], start=1):
         gate_id = gate["id"]
         report = report_for(gate_id)
@@ -160,7 +163,7 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
         digest = hashlib.sha256(raw).hexdigest()
         report_paths[gate_id] = path
         reviewer = f"synthetic-reviewer:{gate_id}"
-        reference = f"https://api.github.com/repos/example/dandelion/pulls/1/reviews/{index}"
+        reference = f"https://api.github.com/repos/{review_repository}/pulls/{review_pr}/reviews/{index}"
         attestation = json.dumps({
             "schema_version": 1,
             "gate_id": gate_id,
@@ -174,6 +177,7 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
             "commit_id": current,
             "user": {"login": reviewer},
             "body": attestation,
+            "pull_request_url": f"https://api.github.com/repos/{review_repository}/pulls/{review_pr}",
         }
         proof["gates"][gate_id] = {
             "gate_id": gate_id,
@@ -228,6 +232,20 @@ with tempfile.TemporaryDirectory(prefix="dandelion-evidence-contract-") as direc
     edited_review["gates"][first]["review_body_sha256"] = "0" * 64
     manifest.write_text(json.dumps(edited_review, indent=2) + "\n")
     expect_failure(manifest, "edited GitHub review body", fetch_review)
+
+    foreign_repository = copy.deepcopy(proof)
+    foreign_repository["gates"][first]["review_reference"] = (
+        f"https://api.github.com/repos/example/dandelion/pulls/{review_pr}/reviews/9001"
+    )
+    manifest.write_text(json.dumps(foreign_repository, indent=2) + "\n")
+    expect_failure(manifest, "review from a foreign repository", fetch_review)
+
+    foreign_pr = copy.deepcopy(proof)
+    foreign_pr["gates"][first]["review_reference"] = (
+        f"https://api.github.com/repos/{review_repository}/pulls/{review_pr + 1}/reviews/9002"
+    )
+    manifest.write_text(json.dumps(foreign_pr, indent=2) + "\n")
+    expect_failure(manifest, "review from a different pull request", fetch_review)
 
     hotspot = "physical-hotspot"
     strong_hotspot = report_paths[hotspot].read_bytes()

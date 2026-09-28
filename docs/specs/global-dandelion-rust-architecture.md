@@ -362,9 +362,10 @@ is invalid even when its digest is correct.
 
 Reviewer metadata is also bound to the exact report SHA-256 and tested commit, with
 an approve decision and immutable external review reference. The local verifier
-checks that binding and performer/reviewer separation; the external acceptance
-process remains responsible for authenticating that reviewer identity and for
-confirming that claimed physical observations actually occurred.
+re-fetches the canonical scoped GitHub review and checks actor, approval state,
+exact commit, attestation body digest and performer/reviewer separation. The external
+acceptance process remains responsible for confirming that claimed physical
+observations actually occurred and that off-GitHub performer identity is truthful.
 
 ## 21. Implementation records
 
@@ -391,3 +392,17 @@ Full-replacement acceptance MUST NOT trust a manifest-provided reviewer name or 
 For a real `--require-complete` verification, every gate entry must reference a live GitHub pull-request review API URL of the form `https://api.github.com/repos/{owner}/{repo}/pulls/{pr}/reviews/{id}`. The verifier re-fetches that review, requires state `APPROVED`, requires its `commit_id` to equal the exact tested commit, and requires the returned GitHub login to equal `reviewed_by`.
 
 The GitHub review body itself is a JSON attestation containing `schema_version=1`, the exact `gate_id`, exact `tested_commit`, exact gate-report SHA-256 and `decision=approve`. The manifest pins the exact UTF-8 review body with `review_body_sha256`; an edited, dismissed, stale, nonexistent, non-GitHub or mismatched review therefore fails closed. CI self-tests inject a synthetic review resolver only for contract tests; real full-replacement verification uses the live GitHub API.
+
+
+### Reviewer scope pinning (evidence contract v3)
+
+A live APPROVED review is insufficient if it can be replayed from an unrelated
+repository or pull request. The evidence contract therefore fixes a canonical
+`review_scope` for this migration: repository `bhrumom/global-dandelion-rs`,
+pull request `#1`. Every `review_reference` MUST target that exact scope.
+
+The verifier rejects a foreign repository or different pull request before resolving
+the review, then requires the fetched GitHub review's `pull_request_url` to equal
+the canonical PR API URL. The synthetic contract test includes both replay negatives.
+This closes cross-repository/cross-PR reviewer-attestation substitution without
+claiming that GitHub identity alone proves the truth of physical observations.
