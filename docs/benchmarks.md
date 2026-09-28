@@ -54,9 +54,12 @@ only reviewed side-effect-free scan/read/legacy-loopback expressions on syntheti
 local fixtures. It alternates Python/Rust order and records raw wall time, user/system
 CPU, peak RSS, dataset throughput and repeated SIGTERM settlement distributions.
 
-The harness requires both `--tested-commit` and `--artifact-head-commit`; these
-must be the same full SHA so candidate evidence cannot be detached from the workflow
-head that produced the tested artifact. Wire contracts are reported separately:
+The harness requires `--tested-commit`, `--artifact-head-commit`, and
+`--artifact-build-info`. The tested commit and workflow head must be the same full
+SHA, and the harness independently reads `BUILD-INFO.txt` from the extracted artifact
+and requires its `git_sha` to match as well. Candidate evidence therefore fails closed
+if a pull-request workflow metadata SHA differs from the commit actually checked out
+and compiled. Wire contracts are reported separately:
 the Python baseline uses the pinned u32be+MD5 UDP packet expression while Rust uses
 protocol v2 and verified local receipts. That difference must not be presented as
 identical wire work or as a universal Rust/Python speedup claim.
