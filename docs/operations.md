@@ -31,6 +31,17 @@ file permissions and regular/no-symlink/no-hardlink inputs. Explicit numeric pee
 addresses are checked independently from certificate DNS names. Trust is not
 inferred from ARP tables, country metadata or newly mounted volumes.
 
+For public WAN selection, configure only address/CIDR pools for which the operator
+has explicit authorization to send workload traffic. Set `wan_enabled=true`,
+`target_count=1..8`, choose `target_selection` as `sequential`, `randomized`,
+or `deterministic_seeded`, and supply `target_seed` only for deterministic-seeded
+selection. Each pool entry binds a CIDR, destination port and TLS server name.
+Pool cardinality and entries are bounded; private/link-local/multicast/invalid pools,
+overlapping ranges, over-selection and overlap with explicit peers fail validation.
+Selection itself grants no authority: shipping TLS composition revalidates each
+concrete SocketAddr against the exact allowlist or configured pool before connecting.
+The unrestricted public Internet is never an implicit pool.
+
 The receiver uses mTLS for all sessions. Non-loopback binds require explicit remote
 consent and allowed client IPs; keep CA scope narrow and rotate certificates through
 an operator-controlled policy. No plaintext payload fallback is supported.
@@ -124,8 +135,33 @@ new acceptable release is present rather than install the same version repeatedl
 The optional systemd check service/timer uses operator-defined MANIFEST_URL,
 SIGNATURE_URL and PUBLIC_KEY_FILE in /etc/dandelion/update-check.conf. The service
 account, paths, CA permissions, key trust and sandbox must be validated at deployment.
-Templates are not installed/enabled by this CLI or by CI. Normal transfer service
-restarts do not reset quotas; budget/config/verification exits are not auto-restarted.
+Templates are not installed/enabled by this CLI. Normal transfer service restarts do
+not reset quotas; budget/config/verification exits are not auto-restarted.
+
+## Headless systemd service
+
+`packaging/systemd/dandelion.service` is the supported foreground-under-systemd
+unit. Installation does not enable it. After provisioning the `dandelion` account,
+binary, read-only sources, credentials and `/etc/dandelion/dandelion.toml`, the
+operator may explicitly run `systemctl enable --now dandelion.service`. Use
+`journalctl -u dandelion.service` for stdout/stderr records and
+`systemctl stop/restart dandelion.service` for supervised lifecycle operations.
+
+The unit is `Type=simple`; the process never self-daemonizes. Unexpected operational
+failure is delayed by two seconds and bounded by three starts per 60 seconds.
+Configuration/protocol/budget exits (2/4/75) are not restarted, while graceful
+cancellation exit 130 is treated as success. `TimeoutStopSec=15` bounds service
+manager shutdown; the application still applies its shorter configured cooperative
+deadline internally. `StateDirectory=dandelion` provides a private durable parent,
+and the application writer lock rejects a second owner. Restart uses the same state
+and checkpoint files rather than manufacturing a fresh quota.
+
+CI runs `scripts/systemd_acceptance.py` on disposable GitHub Actions Linux runners.
+It verifies the unit with systemd, runtime-enables a temporary equivalent unit,
+proves the process stays active in the background, rejects a duplicate state owner,
+stops through SIGTERM within deadline, observes journal output, restarts against
+durable state, and exercises the bounded systemd restart limiter. The temporary unit
+uses loopback transport only and is removed before the job exits.
 
 ## Legacy compatibility
 
