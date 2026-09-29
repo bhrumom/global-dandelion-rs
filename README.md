@@ -73,9 +73,11 @@ Rust. CI checks dependency direction; it is not a substitute for runtime tests.
 Local UDP remains the default. External transfers use **mutual TLS 1.3**, trusted
 CA/client/server identities, explicit numeric targets and verified server names.
 TLS names do not perform destination DNS expansion. A public peer requires WAN enable and authorization by the effective target policy.
-Revision 2.1 additionally requires bounded randomized selection inside explicitly
-authorized public address/CIDR pools. Generated targets do not authorize themselves;
-each target must pass policy validation before authenticated session establishment.
+Revision 2.1 bounded public target pools are implemented through a TargetPool plus
+separate sequential, randomized and deterministic-seeded TargetSelector. Pools are
+explicitly configured/authorized CIDRs, selection is bounded, and every generated
+address is revalidated by the effective target policy before authenticated session
+establishment. The selected concrete peers are visible in runtime target health.
 Discovery never authorizes a network peer. See [TLS example](examples/tls-client.toml).
 
 ```sh
@@ -147,8 +149,9 @@ Production key provisioning and activation/rollback require operator validation.
 
 `compat` contains bounded country lookup, legacy packet inspection, and opt-in
 journaled link exercise/recovery. Unrestricted public-Internet spray remains
-excluded; authorized-pool randomized target selection is now required by Spec 2.1
-and remains pending until production implementation and tests are added. MD5 is legacy interoperability, not authentication.
+excluded. Authorized-pool target selection is implemented and covered by core/config/
+shipping-composition tests; CI never sends workload data to those public targets.
+MD5 is legacy interoperability, not authentication.
 
 ## Build, test, artifacts and limitations
 
