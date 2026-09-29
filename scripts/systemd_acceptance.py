@@ -98,6 +98,15 @@ def wait_active(name, deadline=6.0):
     return False
 
 
+def wait_for_path(path: Path, deadline=6.0):
+    stop = time.monotonic() + deadline
+    while time.monotonic() < stop:
+        if path.is_file():
+            return True
+        time.sleep(0.1)
+    return False
+
+
 def toml_string(value: Path) -> str:
     return json.dumps(str(value))
 
@@ -182,6 +191,19 @@ WantedBy=multi-user.target
             )
             raise RuntimeError(f"service did not remain active: {status.stdout}\n{status.stderr}")
         results["background_active"] = True
+        state_file = state / "state.json"
+        if not wait_for_path(state_file):
+            status = sudo(
+                "systemctl", "status", service_name, "--no-pager", check_result=False
+            )
+            journal = sudo(
+                "journalctl", "-u", service_name, "--no-pager", "-n", "100", "-o", "cat",
+                check_result=False,
+            )
+            raise RuntimeError(
+                "service became active but did not durably reserve state before readiness; "
+                f"status={status.stdout} journal={journal.stdout}"
+            )
 
         duplicate = run(
             str(binary),
@@ -213,7 +235,6 @@ WantedBy=multi-user.target
         results["graceful_sigterm"] = True
         results["shutdown_seconds"] = elapsed
 
-        state_file = state / "state.json"
         if not state_file.is_file() or not (state / "writer.lock").is_file():
             raise RuntimeError("durable state was not created before service stop")
         first_state = json.loads(state_file.read_text())
