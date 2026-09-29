@@ -41,7 +41,7 @@ A green foundation gate must never be described as unconditional full replacemen
 | shutdown | redesigned | implemented | current-ci | Supervisor |
 | state | redesigned | implemented | current-ci | dandelion-state |
 | country-metadata | redesigned | implemented | current-ci | dandelion-compat country |
-| random-public-targets | redesigned | pending | current-ci | authorized TargetPool + randomized TargetSelector |
+| random-public-targets | redesigned | implemented | current-ci | authorized TargetPool + TargetSelector |
 | target-health | redesigned | implemented | current-ci | transport peer receipts / socket meter |
 | neighbour-discovery | redesigned | implemented | current-ci | read-only platform inventory |
 | target-policy | redesigned | implemented | current-ci | core exact-address capability |
@@ -49,4 +49,4 @@ A green foundation gate must never be described as unconditional full replacemen
 | wire-budget | redesigned | implemented | current-ci | core + Supervisor |
 | orchestration | redesigned | implemented | current-ci | app |
 
-[Machine-readable inventory](parity.json) contains original symbols, ranges, reasons and concrete evidence paths. Two unsafe legacy defaults remain deliberately removed. Random public-target selection is now a required redesigned capability, but only inside explicitly authorized address/CIDR pools; it remains pending until production wiring and tests exist. No pending domain is replaced by a no-op command. Some redesigned behaviors intentionally differ: lifetime rather than automatic monthly budgets, authenticated unicast rather than unsolicited broadcasts, file-level rather than byte-level resume, and signed staging rather than active binary self-overwrite.
+[Machine-readable inventory](parity.json) contains original symbols, ranges, reasons and concrete evidence paths. Two unsafe legacy defaults remain deliberately removed. Authorized-pool public target selection is implemented with bounded sequential, randomized and deterministic-seeded selection, followed by mandatory policy revalidation in shipping TLS composition. The unrestricted public Internet remains outside the implicit authorization scope. No pending domain is replaced by a no-op command. Some redesigned behaviors intentionally differ: lifetime rather than automatic monthly budgets, authenticated unicast rather than unsolicited broadcasts, file-level rather than byte-level resume, and signed staging rather than active binary self-overwrite.
