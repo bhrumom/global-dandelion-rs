@@ -56,14 +56,6 @@ required_template = [
 missing = [item for item in required_template if item not in raw]
 if missing:
     raise RuntimeError(f"systemd template contract missing: {missing}")
-subprocess.run(
-    ["systemd-analyze", "verify", str(template)],
-    check=True,
-    text=True,
-    capture_output=True,
-    timeout=20,
-)
-
 results = {
     "template_verified": True,
     "boot_enablement": False,
@@ -165,6 +157,13 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 """
+        )
+        subprocess.run(
+            ["systemd-analyze", "verify", str(unit)],
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=20,
         )
         sudo("cp", str(unit), str(system_service))
         sudo("systemctl", "daemon-reload")
