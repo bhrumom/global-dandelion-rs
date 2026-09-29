@@ -9,6 +9,40 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 
+fn authorized_tls_peers(
+    tls: &dandelion_config::Tls,
+) -> Result<Vec<dandelion_core::targets::AuthorizedPeer>> {
+    use dandelion_core::targets::{TargetPool, TargetSelector};
+
+    if tls.target_pool.is_empty() {
+        return dandelion_core::targets::authorize(
+            &tls.peers,
+            tls.wan_enabled,
+            &tls.wan_allowlist,
+        );
+    }
+
+    let pool = TargetPool::new(&tls.target_pool)?;
+    let mut selector =
+        TargetSelector::new(&pool, tls.target_selection, tls.target_seed)?;
+    let selected = selector.select(tls.target_count)?;
+    tracing::info!(
+        selection_mode = ?tls.target_selection,
+        pool_entries = tls.target_pool.len(),
+        pool_cardinality = pool.len(),
+        selected_targets = ?selected.iter().map(|peer| peer.address).collect::<Vec<_>>(),
+        "authorized_target_pool_selected"
+    );
+    let mut peers = tls.peers.clone();
+    peers.extend(selected);
+    dandelion_core::targets::authorize_with_pool(
+        &peers,
+        tls.wan_enabled,
+        &tls.wan_allowlist,
+        Some(&pool),
+    )
+}
+
 pub struct StorageGuard;
 impl dandelion_state::WriteGuard for StorageGuard {
     fn check(&self, directory: &Path, additional_peak_bytes: u64) -> Result<()> {
@@ -328,11 +362,7 @@ async fn service(
                 .await?
         } else if let Some(tls_config) = &tls_config {
             let tls = &config.transport.tls;
-            let peers = dandelion_core::targets::authorize(
-                &tls.peers,
-                tls.wan_enabled,
-                &tls.wan_allowlist,
-            )?;
+            let peers = authorized_tls_peers(tls)?;
             let transport = dandelion_transport::tls::Peers::connect(
                 &peers,
                 tls_config.clone(),
