@@ -262,3 +262,33 @@ Because this verifier change advances the branch, exact-HEAD run 36458887843 on
 `current-ci` purposes even if it completes green. A fresh exact-HEAD run and freshly
 downloaded/inspected artifacts are required. Full replacement remains false until all
 five real gates and canonical independent APPROVED attestations exist.
+
+
+## Spec 2.1 target-pool and systemd closure (2026-09-29)
+
+The reopened `random-public-targets` responsibility is implemented without restoring
+Internet-wide unsolicited destination generation. `dandelion-core` now owns a
+range-backed bounded `TargetPool` and separate sequential/randomized/
+deterministic-seeded `TargetSelector`. Configuration requires explicit WAN consent,
+authorized public CIDRs, bounded selection count and valid mode/seed combinations.
+The shipping application composition selects concrete targets immediately before
+TLS establishment and revalidates them through the effective target policy; the peer
+clock path uses the same helper. Core/config/composition tests do not transmit to
+public targets.
+
+The systemd service contract is now executable CI acceptance rather than template-
+only documentation. The unit has explicit two-second restart delay, three starts per
+60-second limit, restart-prevent statuses for configuration/protocol/budget failures,
+journald routing and graceful-cancellation success. `scripts/systemd_acceptance.py`
+runtime-enables a temporary loopback-only unit on disposable GitHub Actions runners,
+checks active background supervision and duplicate-state-owner rejection, stops it
+through SIGTERM, verifies durable state across restart and journal output, and uses a
+separate failing temporary unit to prove the restart limiter. Both architecture
+artifacts package the resulting JSON and SHA256SUMS binds it.
+
+The machine parity ledger is therefore 37/37 settled: 35 implemented and two
+intentional removals, with zero pending code. This is not full replacement acceptance.
+Every new commit invalidates predecessor current-ci evidence; exact-HEAD Actions,
+artifact inspection, independently approved current-ci/controlled-cutover evidence,
+physical hotspot/hotplug proof and production release-trust evidence are still
+required before `full_replacement_verified` can become true.
