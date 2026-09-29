@@ -100,6 +100,10 @@ pub struct Tls {
     pub peers: Vec<dandelion_core::targets::Peer>,
     pub wan_enabled: bool,
     pub wan_allowlist: Vec<std::net::SocketAddr>,
+    pub target_pool: Vec<dandelion_core::targets::TargetPoolEntry>,
+    pub target_selection: dandelion_core::targets::TargetSelectionMode,
+    pub target_count: usize,
+    pub target_seed: Option<u64>,
     pub timeout_ms: u64,
     pub connect_attempts: u8,
 }
@@ -112,6 +116,10 @@ impl Default for Tls {
             peers: Vec::new(),
             wan_enabled: false,
             wan_allowlist: Vec::new(),
+            target_pool: Vec::new(),
+            target_selection: dandelion_core::targets::TargetSelectionMode::Sequential,
+            target_count: 0,
+            target_seed: None,
             timeout_ms: 10000,
             connect_attempts: 1,
         }
@@ -264,12 +272,64 @@ impl Config {
             ));
         }
         if matches!(self.transport.mode, Mode::Tls) {
-            self.transport.tls.validate_credentials()?;
-            dandelion_core::targets::authorize(
-                &self.transport.tls.peers,
-                self.transport.tls.wan_enabled,
-                &self.transport.tls.wan_allowlist,
-            )?;
+            let tls = &self.transport.tls;
+            tls.validate_credentials()?;
+            if tls.target_pool.is_empty() {
+                if tls.target_count != 0 || tls.target_seed.is_some() {
+                    return Err(fail(
+                        "target_count/target_seed require a non-empty authorized target_pool",
+                    ));
+                }
+                dandelion_core::targets::authorize(
+                    &tls.peers,
+                    tls.wan_enabled,
+                    &tls.wan_allowlist,
+                )?;
+            } else {
+                if !tls.wan_enabled || !(1..=8).contains(&tls.target_count) {
+                    return Err(fail(
+                        "authorized public target_pool requires wan_enabled=true and target_count 1..8",
+                    ));
+                }
+                if tls.peers.len().saturating_add(tls.target_count) > 8 {
+                    return Err(fail(
+                        "explicit peers plus selected target_count must not exceed 8",
+                    ));
+                }
+                match tls.target_selection {
+                    dandelion_core::targets::TargetSelectionMode::Sequential
+                    | dandelion_core::targets::TargetSelectionMode::Randomized => {
+                        if tls.target_seed.is_some() {
+                            return Err(fail(
+                                "target_seed is only valid with deterministic_seeded selection",
+                            ));
+                        }
+                    }
+                    dandelion_core::targets::TargetSelectionMode::DeterministicSeeded => {
+                        if tls.target_seed.is_none() {
+                            return Err(fail(
+                                "deterministic_seeded target selection requires target_seed",
+                            ));
+                        }
+                    }
+                }
+                let pool = dandelion_core::targets::TargetPool::new(&tls.target_pool)?;
+                if u64::try_from(tls.target_count)
+                    .ok()
+                    .is_none_or(|count| count > pool.len())
+                {
+                    return Err(fail(
+                        "target_count exceeds the authorized target_pool cardinality",
+                    ));
+                }
+                if !tls.peers.is_empty() {
+                    dandelion_core::targets::authorize(
+                        &tls.peers,
+                        tls.wan_enabled,
+                        &tls.wan_allowlist,
+                    )?;
+                }
+            }
         }
         Ok(ValidatedConfig(self))
     }
@@ -420,6 +480,36 @@ mod tests {
         let mut config = Config::default();
         config.runtime.max_pipeline_bytes = 1;
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn authorized_target_pool_configuration_is_fail_closed() {
+        let mut config = Config::default();
+        config.transport.mode = Mode::Tls;
+        config.transport.tls.ca_file = "ca.pem".into();
+        config.transport.tls.certificate_file = "client.pem".into();
+        config.transport.tls.private_key_file = "client.key".into();
+        config.transport.tls.wan_enabled = true;
+        config.transport.tls.target_pool = vec![dandelion_core::targets::TargetPoolEntry {
+            cidr: "8.8.8.0/29".into(),
+            port: 443,
+            server_name: "example.invalid".into(),
+        }];
+        config.transport.tls.target_count = 2;
+        config.transport.tls.target_selection =
+            dandelion_core::targets::TargetSelectionMode::DeterministicSeeded;
+        config.transport.tls.target_seed = Some(7);
+        assert!(config.clone().validate().is_ok());
+
+        let mut no_wan = config.clone();
+        no_wan.transport.tls.wan_enabled = false;
+        assert!(no_wan.validate().is_err());
+        let mut private_pool = config.clone();
+        private_pool.transport.tls.target_pool[0].cidr = "10.0.0.0/24".into();
+        assert!(private_pool.validate().is_err());
+        let mut unseeded = config;
+        unseeded.transport.tls.target_seed = None;
+        assert!(unseeded.validate().is_err());
     }
 
     #[test]
