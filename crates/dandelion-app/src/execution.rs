@@ -15,16 +15,11 @@ pub(crate) fn authorized_tls_peers(
     use dandelion_core::targets::{TargetPool, TargetSelector};
 
     if tls.target_pool.is_empty() {
-        return dandelion_core::targets::authorize(
-            &tls.peers,
-            tls.wan_enabled,
-            &tls.wan_allowlist,
-        );
+        return dandelion_core::targets::authorize(&tls.peers, tls.wan_enabled, &tls.wan_allowlist);
     }
 
     let pool = TargetPool::new(&tls.target_pool)?;
-    let mut selector =
-        TargetSelector::new(&pool, tls.target_selection, tls.target_seed)?;
+    let mut selector = TargetSelector::new(&pool, tls.target_selection, tls.target_seed)?;
     let selected = selector.select(tls.target_count)?;
     tracing::info!(
         selection_mode = ?tls.target_selection,
@@ -469,7 +464,6 @@ mod resume_scope_tests {
         assert_ne!(digest(&original), digest(&mount(41, "8:33", "/dev/sdc1")));
     }
 }
-
 
 #[cfg(test)]
 mod target_pool_composition_tests {
