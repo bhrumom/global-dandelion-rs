@@ -2,6 +2,8 @@
 Description=Global Dandelion bounded transfer service
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -11,9 +13,13 @@ StateDirectory=dandelion
 StateDirectoryMode=0700
 ExecStart=/usr/bin/dandelion --config /etc/dandelion/dandelion.toml run --watch --interval-ms 60000 --json
 Restart=on-failure
+RestartSec=2s
 RestartPreventExitStatus=2 4 75
 SuccessExitStatus=130
 TimeoutStopSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dandelion
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
