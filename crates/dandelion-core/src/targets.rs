@@ -2,7 +2,7 @@
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{hash_map::RandomState, BTreeSet},
+    collections::{BTreeSet, hash_map::RandomState},
     hash::{BuildHasher, Hasher},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 };
@@ -344,11 +344,7 @@ pub struct TargetSelector<'a> {
 }
 
 impl<'a> TargetSelector<'a> {
-    pub fn new(
-        pool: &'a TargetPool,
-        mode: TargetSelectionMode,
-        seed: Option<u64>,
-    ) -> Result<Self> {
+    pub fn new(pool: &'a TargetPool, mode: TargetSelectionMode, seed: Option<u64>) -> Result<Self> {
         if pool.is_empty() {
             return Err(Error::Config("target pool is empty".into()));
         }
@@ -366,7 +362,8 @@ impl<'a> TargetSelector<'a> {
                     TargetSelectionMode::Randomized => {
                         if seed.is_some() {
                             return Err(Error::Config(
-                                "randomized target selection does not accept a deterministic seed".into(),
+                                "randomized target selection does not accept a deterministic seed"
+                                    .into(),
                             ));
                         }
                         let mut hasher = RandomState::new().build_hasher();
@@ -414,8 +411,8 @@ impl<'a> TargetSelector<'a> {
                 "target selection count must be 1..{MAX_TARGETS_PER_SESSION}"
             )));
         }
-        let count_u64 =
-            u64::try_from(count).map_err(|_| Error::Config("target selection count overflow".into()))?;
+        let count_u64 = u64::try_from(count)
+            .map_err(|_| Error::Config("target selection count overflow".into()))?;
         if self
             .emitted
             .checked_add(count_u64)
@@ -577,9 +574,7 @@ mod tests {
         assert!(TargetPool::new(&[pool_entry("10.0.0.0/24")]).is_err());
         assert!(TargetPool::new(&[pool_entry("169.254.0.0/16")]).is_err());
         assert!(TargetPool::new(&[pool_entry("8.8.8.1/29")]).is_err());
-        assert!(
-            TargetPool::new(&[pool_entry("8.8.8.0/29"), pool_entry("8.8.8.4/30")]).is_err()
-        );
+        assert!(TargetPool::new(&[pool_entry("8.8.8.0/29"), pool_entry("8.8.8.4/30")]).is_err());
         let pool = TargetPool::new(&[pool_entry("8.8.8.8/32")]).unwrap();
         let mut selector =
             TargetSelector::new(&pool, TargetSelectionMode::DeterministicSeeded, Some(7)).unwrap();
