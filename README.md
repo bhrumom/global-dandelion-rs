@@ -3,7 +3,7 @@
 [Chinese documentation](README.zh-CN.md)
 
 A native Linux Rust CLI replacing the Python program through explicit, bounded,
-testable components. **Spec revision 2 replaces the original first-slice Spec.**
+testable components. **Spec revision 2.1 replaces the original first-slice Spec.**
 This branch now contains real implementations across transfer, state/resume,
 platform discovery, pacing, TUI, hotspot, signed updates and legacy compatibility.
 Full hardware and controlled whole-program cutover acceptance remains separate from
@@ -72,9 +72,11 @@ Rust. CI checks dependency direction; it is not a substitute for runtime tests.
 
 Local UDP remains the default. External transfers use **mutual TLS 1.3**, trusted
 CA/client/server identities, explicit numeric targets and verified server names.
-TLS names do not perform destination DNS expansion. A public peer requires its
-explicit authorization, WAN enable and exact address allowlist. Discovery never
-authorizes a network peer. See [TLS example](examples/tls-client.toml).
+TLS names do not perform destination DNS expansion. A public peer requires WAN enable and authorization by the effective target policy.
+Revision 2.1 additionally requires bounded randomized selection inside explicitly
+authorized public address/CIDR pools. Generated targets do not authorize themselves;
+each target must pass policy validation before authenticated session establishment.
+Discovery never authorizes a network peer. See [TLS example](examples/tls-client.toml).
 
 ```sh
 dandelion receive --bind 127.0.0.1:20000 --ca-file credentials/ca.pem \
@@ -137,13 +139,16 @@ hardware acceptance remains outstanding. See [operations](docs/operations.md).
 `update check/stage` verifies an independently trusted Ed25519 public key, manifest
 signature, version, architecture, expiry, SHA-256 and exact artifact size. Explicit
 HTTPS origins and no redirects are enforced. Staging never executes/replaces the
-active binary. [systemd templates](packaging/systemd/) provide optional service and
-periodic signed release checking; nothing is installed/enabled automatically.
+active binary. [systemd templates](packaging/systemd/) provide the supported headless service and
+periodic signed release checking. The service is designed for `systemctl enable`
+boot startup, systemd-owned restart supervision, journald-compatible logging and
+graceful SIGTERM shutdown; installation still does not silently enable transmission.
 Production key provisioning and activation/rollback require operator validation.
 
 `compat` contains bounded country lookup, legacy packet inspection, and opt-in
-journaled link exercise/recovery. No random-IP generator, filename-guess deletion
-or public traffic spray is ported. MD5 is legacy interoperability, not authentication.
+journaled link exercise/recovery. Unrestricted public-Internet spray remains
+excluded; authorized-pool randomized target selection is now required by Spec 2.1
+and remains pending until production implementation and tests are added. MD5 is legacy interoperability, not authentication.
 
 ## Build, test, artifacts and limitations
 
@@ -178,7 +183,7 @@ cutover measurements remain separate acceptance gates, never implied by a green 
 
 ## Source of truth
 
-[Spec v2](docs/specs/global-dandelion-rust-architecture.md) replaces the archived v1.
+[Spec v2.1](docs/specs/global-dandelion-rust-architecture.md) replaces the archived v1.
 [Migration ledger](docs/migration/python-parity-ledger.md), [ADRs](docs/adr/),
 [development record](docs/development/2026-09-28-complete-migration.md),
 [operations](docs/operations.md), [benchmark methodology](docs/benchmarks.md).
