@@ -617,16 +617,12 @@
         2895,
         2955
       ],
-      "destination": "none",
-      "classification": "intentionally-removed",
-      "status": "removed",
-      "reason": "Random unsolicited public traffic is intentionally not ported.",
-      "evidence": [
-        "docs/adr/0001-first-vertical-slice.md",
-        "crates/dandelion-config/src/lib.rs",
-        "crates/dandelion-transport/src/lib.rs"
-      ],
-      "verification_scope": "documented-exclusion"
+      "destination": "authorized TargetPool + randomized TargetSelector",
+      "classification": "redesigned",
+      "status": "pending",
+      "reason": "Required randomized public-target selection within explicitly configured and authorized address/CIDR pools. The unrestricted public Internet is not an implicit authorized pool; generated addresses must be revalidated before authenticated session establishment.",
+      "evidence": [],
+      "verification_scope": "current-ci"
     },
     {
       "id": "target-health",
