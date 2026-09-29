@@ -209,7 +209,7 @@ impl TargetPool {
                 "target pool needs 1..{MAX_POOL_ENTRIES} CIDR entries"
             )));
         }
-        let mut ranges = Vec::with_capacity(entries.len());
+        let mut ranges: Vec<TargetRange> = Vec::with_capacity(entries.len());
         let mut slots = 0_u64;
         for entry in entries {
             if entry.port == 0
