@@ -1,6 +1,6 @@
 # Global Dandelion: Complete Native Rust CLI Architecture and Acceptance Spec
 
-Revision: **2.0**. Updated: **2026-09-28**. Status: **authoritative implementation contract**.
+Revision: **2.1**. Updated: **2026-09-29**. Status: **authoritative implementation contract**.
 This document REPLACES revision 1; it does not append another first-slice plan.
 Revision 1 is preserved only in `docs/history/architecture-v1.md` for provenance.
 
@@ -75,12 +75,14 @@ features still need explicit disposition, rationale and evidence.
 
 ## 4. Deliberately excluded unsafe defaults
 
-Never restore random whole-Internet IP spraying, broadcast-to-discovered strangers,
-implicit root elevation, hidden clock/timezone mutation, unlimited queues or
-CPU_COUNT * 50 worker explosions. These exclusions preserve the existing approved
-safety contract; they do not excuse omitting legitimate authorized transfers.
-WAN, hotspot, drive enrollment, source rename and update installation are opt-in.
-CI must never send workload data to arbitrary public hosts or mutate host networking.
+Never restore broadcast-to-discovered strangers, implicit root elevation, hidden
+clock/timezone mutation, unlimited queues or CPU_COUNT * 50 worker explosions.
+Randomized public-target selection MAY be supported, but only inside explicitly
+configured address/CIDR pools for which the operator has authorization to transmit
+workload traffic. The unrestricted public Internet is never an implicit authorized
+pool. WAN, hotspot, drive enrollment, source rename and update installation are
+opt-in. CI must never send workload data to arbitrary public hosts or mutate host
+networking.
 
 ## 5. Repository and dependency architecture
 
@@ -158,6 +160,15 @@ receive, state inspect/import, hotspot plan/apply/status/stop, update check/stag
 compat recovery, benchmark, completions. A family appears in --help only when it
 has real behavior; do not invent commands returning success for pending features.
 
+Linux deployment MUST support unattended headless operation through a hardened
+systemd service. The service MUST be enable-able at boot, remain supervised by
+systemd rather than self-daemonizing, restart only under a bounded documented
+policy after unexpected failure, write structured logs suitable for journald,
+recover durable state/checkpoints, reject duplicate ownership, and honor the same
+graceful SIGTERM shutdown deadline as foreground execution. Enable/disable/start/
+stop/restart remain explicit operator actions; installation MUST NOT silently enable
+network transmission.
+
 Machine results -> stdout; human diagnostics/structured tracing -> stderr.
 Noninteractive/headless usage is first class. Help/version/completion never need
 network/root. Handle broken stdout only at output boundaries, not as transport
@@ -187,7 +198,16 @@ interval and cancellation; never a busy-spin loop or unlimited implicit daemon.
 Keep the proven local loopback adapter. External peers are validated numeric
 SocketAddr values from configured policy; reject unspecified/multicast/broadcast,
 zero ports, out-of-policy targets and implicit DNS expansion. Private, VPS and WAN
-classes are explicit; a public target requires WAN enabled and an exact allowlist.
+classes are explicit; a public target requires WAN enabled and authorization by the
+effective target policy.
+
+For explicitly authorized public address/CIDR pools, the target-policy layer MAY
+expose a bounded TargetPool and a separate TargetSelector supporting sequential,
+randomized, deterministic-seeded and weighted selection. Generation does not grant
+authorization: every selected address MUST be revalidated against the effective
+policy before session establishment. Randomized selection MUST be reproducible in
+tests, observable in status/telemetry, bounded in memory, and unable to widen its
+configured authorization scope.
 
 Sending file payload to external peers requires authenticated session establishment,
 matching receipts and bounded timeouts. A checksum alone is not authentication.
@@ -304,9 +324,13 @@ All adapters must be wired through the real CLI in at least one integration test
 
 Every PR and main push: fmt, Clippy -D warnings, all workspace/all-feature tests,
 architecture check, machine parity validation, RustSec audit, cargo-deny, native
-Linux x86_64/aarch64 build and tests, final required acceptance gate. Pin toolchain,
-lockfile and Actions SHAs. Never report green from a previous HEAD. Preserve raw
-results and failure evidence. Optional hardware gates must be visibly outstanding.
+Linux x86_64/aarch64 build and tests, systemd unit/install lifecycle validation, and
+final required acceptance gate. Service tests MUST cover non-TTY startup, duplicate
+instance prevention, bounded restart behavior, SIGTERM graceful shutdown, journald-
+suitable output separation and state recovery after a supervised restart. Pin
+toolchain, lockfile and Actions SHAs. Never report green from a previous HEAD.
+Preserve raw results and failure evidence. Optional hardware gates must be visibly
+outstanding.
 
 ## 19. Benchmark equivalence and acceptance
 
@@ -329,8 +353,9 @@ not an excuse to declare the remaining product out of scope.
 
 Full replacement requires every required capability settled, production wiring,
 exact-HEAD green CI, real authorization rejection, bounded memory/storage,
-restart/cancellation/corruption tests, appropriate real-device hardware proof,
-controlled baseline report, versioned releasable artifacts and operational docs.
+restart/cancellation/corruption tests, verified boot-enabled/background service
+lifecycle, appropriate real-device hardware proof, controlled baseline report,
+versioned releasable artifacts and operational docs.
 A complete gate must fail while required pending rows/hardware proofs remain.
 A foundation gate may pass independently but must not be named full completion.
 
