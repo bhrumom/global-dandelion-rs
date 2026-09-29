@@ -2,7 +2,8 @@
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
+    collections::{hash_map::RandomState, BTreeSet},
+    hash::{BuildHasher, Hasher},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 };
 
@@ -361,9 +362,24 @@ impl<'a> TargetSelector<'a> {
                 (0, 1)
             }
             TargetSelectionMode::Randomized | TargetSelectionMode::DeterministicSeeded => {
-                let mut state = seed.ok_or_else(|| {
-                    Error::Config("randomized target selection requires a seed".into())
-                })?;
+                let mut state = match mode {
+                    TargetSelectionMode::Randomized => {
+                        if seed.is_some() {
+                            return Err(Error::Config(
+                                "randomized target selection does not accept a deterministic seed".into(),
+                            ));
+                        }
+                        let mut hasher = RandomState::new().build_hasher();
+                        hasher.write_u64(pool.len());
+                        hasher.finish()
+                    }
+                    TargetSelectionMode::DeterministicSeeded => seed.ok_or_else(|| {
+                        Error::Config(
+                            "deterministic_seeded target selection requires a seed".into(),
+                        )
+                    })?,
+                    TargetSelectionMode::Sequential => unreachable!(),
+                };
                 let cursor = splitmix64(&mut state) % pool.len();
                 let mut step = if pool.len() == 1 {
                     1
@@ -540,15 +556,18 @@ mod tests {
         assert_eq!(selected[2].address, "8.8.8.2:443".parse().unwrap());
 
         let mut first =
-            TargetSelector::new(&pool, TargetSelectionMode::Randomized, Some(42)).unwrap();
+            TargetSelector::new(&pool, TargetSelectionMode::DeterministicSeeded, Some(42)).unwrap();
         let mut replay =
-            TargetSelector::new(&pool, TargetSelectionMode::Randomized, Some(42)).unwrap();
+            TargetSelector::new(&pool, TargetSelectionMode::DeterministicSeeded, Some(42)).unwrap();
         let first = first.select(4).unwrap();
         let replay = replay.select(4).unwrap();
         assert_eq!(
             first.iter().map(|peer| peer.address).collect::<Vec<_>>(),
             replay.iter().map(|peer| peer.address).collect::<Vec<_>>()
         );
+        let mut randomized =
+            TargetSelector::new(&pool, TargetSelectionMode::Randomized, None).unwrap();
+        assert_eq!(randomized.select(2).unwrap().len(), 2);
         assert!(authorize(&first, true, &[]).is_err());
         assert!(authorize_with_pool(&first, true, &[], Some(&pool)).is_ok());
     }
