@@ -619,9 +619,13 @@
       ],
       "destination": "authorized TargetPool + randomized TargetSelector",
       "classification": "redesigned",
-      "status": "pending",
-      "reason": "Required randomized public-target selection within explicitly configured and authorized address/CIDR pools. The unrestricted public Internet is not an implicit authorized pool; generated addresses must be revalidated before authenticated session establishment.",
-      "evidence": [],
+      "status": "implemented",
+      "reason": "Bounded TargetPool plus sequential, randomized and deterministic-seeded TargetSelector over explicitly authorized public CIDRs. Shipping TLS composition revalidates every selected address through the effective target policy before connecting; CI never transmits to those public targets.",
+      "evidence": [
+        "crates/dandelion-core/src/targets.rs",
+        "crates/dandelion-config/src/lib.rs",
+        "crates/dandelion-app/src/execution.rs"
+      ],
       "verification_scope": "current-ci"
     },
     {
