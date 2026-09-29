@@ -9,7 +9,7 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 
-fn authorized_tls_peers(
+pub(crate) fn authorized_tls_peers(
     tls: &dandelion_config::Tls,
 ) -> Result<Vec<dandelion_core::targets::AuthorizedPeer>> {
     use dandelion_core::targets::{TargetPool, TargetSelector};
