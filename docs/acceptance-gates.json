@@ -4,7 +4,7 @@
   "required_gates": [
     {
       "id": "current-ci",
-      "requirement": "All automated gates pass on the exact current tested commit; extracted artifacts and real CLI scenarios are verified."
+      "requirement": "All automated gates pass on the exact current tested commit; extracted x86_64/aarch64 artifacts, real CLI scenarios, and packaged systemd lifecycle acceptance are verified."
     },
     {
       "id": "physical-hotspot",
@@ -62,7 +62,8 @@
         "x86_64 and aarch64 artifacts bind workflow head and BUILD-INFO to tested commit",
         "packaged python-rust-comparison rust_sha binds the same tested commit",
         "GitHub ZIP, outer tar archive and packaged binary SHA-256 digests are recorded",
-        "outer checksum, inner SHA256SUMS and packaged self-test verified"
+        "outer checksum, inner SHA256SUMS and packaged self-test verified",
+        "packaged systemd lifecycle acceptance is verified for both native artifacts"
       ],
       "physical-hotspot": [
         "real non-virtual Wi-Fi hardware identity, interface and driver",
