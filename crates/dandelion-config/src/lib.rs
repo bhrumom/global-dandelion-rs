@@ -322,6 +322,11 @@ impl Config {
                         "target_count exceeds the authorized target_pool cardinality",
                     ));
                 }
+                if tls.peers.iter().any(|peer| pool.contains(peer.address)) {
+                    return Err(fail(
+                        "explicit peers must not overlap the authorized target_pool",
+                    ));
+                }
                 if !tls.peers.is_empty() {
                     dandelion_core::targets::authorize(
                         &tls.peers,
