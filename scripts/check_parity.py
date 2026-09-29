@@ -167,6 +167,7 @@ def validate_current_ci(report, current, review_scope, current_ci_scope, github_
         bool_field(item, "outer_archive_checksum_verified", f"current-ci artifact {arch}")
         bool_field(item, "inner_sha256sums_verified", f"current-ci artifact {arch}")
         bool_field(item, "self_test_passed", f"current-ci artifact {arch}")
+        bool_field(item, "systemd_acceptance_verified", f"current-ci artifact {arch}")
 
         matches = [entry for entry in live_artifacts
                    if isinstance(entry, dict) and entry.get("id") == artifact_id]
