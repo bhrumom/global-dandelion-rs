@@ -469,3 +469,31 @@ mod resume_scope_tests {
         assert_ne!(digest(&original), digest(&mount(41, "8:33", "/dev/sdc1")));
     }
 }
+
+
+#[cfg(test)]
+mod target_pool_composition_tests {
+    use super::*;
+
+    #[test]
+    fn shipping_composition_reauthorizes_selected_pool_targets() {
+        let tls = dandelion_config::Tls {
+            wan_enabled: true,
+            target_pool: vec![dandelion_core::targets::TargetPoolEntry {
+                cidr: "8.8.8.0/29".into(),
+                port: 443,
+                server_name: "example.invalid".into(),
+            }],
+            target_selection: dandelion_core::targets::TargetSelectionMode::DeterministicSeeded,
+            target_count: 3,
+            target_seed: Some(99),
+            ..Default::default()
+        };
+        let peers = authorized_tls_peers(&tls).unwrap();
+        assert_eq!(peers.len(), 3);
+        let pool = dandelion_core::targets::TargetPool::new(&tls.target_pool).unwrap();
+        for peer in peers {
+            assert!(pool.contains(peer.address()));
+        }
+    }
+}
