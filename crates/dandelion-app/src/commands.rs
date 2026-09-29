@@ -487,11 +487,7 @@ fn clock(cli: &Cli, peer: bool) -> Result<()> {
         ));
     }
     let settings = &cfg.transport.tls;
-    let peers = dandelion_core::targets::authorize(
-        &settings.peers,
-        settings.wan_enabled,
-        &settings.wan_allowlist,
-    )?;
+    let peers = execution::authorized_tls_peers(settings)?;
     let ca = dandelion_platform_linux::read_credential(&settings.ca_file, false)?;
     let cert = dandelion_platform_linux::read_credential(&settings.certificate_file, false)?;
     let key = dandelion_platform_linux::read_credential(&settings.private_key_file, true)?;
