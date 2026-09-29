@@ -201,9 +201,9 @@ zero ports, out-of-policy targets and implicit DNS expansion. Private, VPS and W
 classes are explicit; a public target requires WAN enabled and authorization by the
 effective target policy.
 
-For explicitly authorized public address/CIDR pools, the target-policy layer MAY
-expose a bounded TargetPool and a separate TargetSelector supporting sequential,
-randomized, deterministic-seeded and weighted selection. Generation does not grant
+For explicitly authorized public address/CIDR pools, the target-policy layer MUST
+provide a bounded TargetPool and a separate TargetSelector supporting sequential,
+randomized and deterministic-seeded selection; weighted selection MAY be added. Generation does not grant
 authorization: every selected address MUST be revalidated against the effective
 policy before session establishment. Randomized selection MUST be reproducible in
 tests, observable in status/telemetry, bounded in memory, and unable to widen its
