@@ -54,6 +54,7 @@ def report_for(gate_id: str) -> dict:
                     "outer_archive_checksum_verified": True,
                     "inner_sha256sums_verified": True,
                     "self_test_passed": True,
+                    "systemd_acceptance_verified": True,
                 }
                 for index, arch in enumerate(("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"))
             ],
