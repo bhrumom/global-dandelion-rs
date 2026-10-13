@@ -20,6 +20,7 @@ async function awaitBrowser() {
     try { await route.fulfill({ body: await readFile(path), contentType: mime[require('node:path').extname(path)] || 'application/octet-stream' }); }
     catch { await route.fulfill({ status: 404, body: '' }); }
   });
+  await context.setOffline(true);
   const page = await context.newPage();
   try {
     await page.goto(origin + '/index.html');
@@ -53,12 +54,17 @@ async function awaitBrowser() {
     await page.locator('#files').setInputFiles({ name: 'next.txt', mimeType: 'text/plain', buffer: Buffer.from('next') });
     await page.locator('#start').click();
     await page.waitForFunction(() => document.getElementById('status').textContent.includes('本地校验完成')); count++;
+    await page.locator('summary').click();
     await page.locator('#remember').check(); await page.locator('#clear').click();
     assert.equal(await page.locator('#remember').isChecked(), false); count++;
     await page.reload();
     await page.waitForFunction(() => document.getElementById('status').textContent.includes('已就绪'));
     assert.equal(await page.locator('#selection li').count(), 0); count++;
     assert.deepEqual(external, []); count++;
+    await page.locator('#files').setInputFiles(Array.from({ length: 129 }, (_, i) => ({ name: `file-${i}.txt`, mimeType: 'text/plain', buffer: Buffer.from('x') })));
+    assert.equal(await page.locator('#start').isDisabled(), true);
+    assert.match(await page.locator('#selection-summary').textContent(), /超出限制/); count++;
+    await page.screenshot({ path: 'miniapp-ui.png', fullPage: true });
     console.log(JSON.stringify({ tests: count, source: process.env.TESTED_COMMIT, result: 'pass', scope: 'offline-browser-fixture-not-Fabushi-installed-acceptance' }));
   } finally { await context.close(); await instance.close(); }
 }

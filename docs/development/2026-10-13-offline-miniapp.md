@@ -25,5 +25,11 @@ therefore do not prove those routes exist on the active Rust control plane.
 The unified device connector reports htch-runtime and macOS/Windows clients
 offline; no actual installed-client acceptance is available in this snapshot.
 
+The actual legacy Rust catalog at GET /v1/marketplace/plugins does return 200;
+its public IDs do not include Global Dandelion. A POST with an empty manifest
+to /v1/extensions/review/fabapp/sign returns 404, confirming that the protected
+OMA signer route is absent, rather than merely waiting for authentication.
+Legacy tar-gz/local-web listings cannot substitute for OMA signed .fabapp trust.
+
 All new acceptance is pending. GitHub CI browser fixtures are preparation evidence,
 not public trust approval or signed Fabushi installed-runtime acceptance.

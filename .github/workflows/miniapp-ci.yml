@@ -2,7 +2,7 @@ name: Offline Mini App
 on:
   pull_request:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]
 permissions:
   contents: read
 env:
@@ -23,7 +23,12 @@ jobs:
         with:
           node-version: '22'
       - name: Resolve separate Web adapter lockfile
-        run: cargo generate-lockfile --manifest-path miniapp/wasm/Cargo.toml
+        run: |
+          if test -f miniapp/wasm/Cargo.lock; then
+            cargo fetch --manifest-path miniapp/wasm/Cargo.toml --locked
+          else
+            cargo generate-lockfile --manifest-path miniapp/wasm/Cargo.toml
+          fi
       - name: Adapter format and tests
         run: |
           cargo fmt --manifest-path miniapp/wasm/Cargo.toml -- --check
@@ -51,6 +56,7 @@ jobs:
       - name: Offline browser contracts
         run: node miniapp/scripts/test_browser.cjs miniapp-resources
       - name: Preserve preparation evidence (not a published release)
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: offline-miniapp-preparation-${{ env.TESTED_COMMIT }}
@@ -59,3 +65,4 @@ jobs:
             global-dandelion-UNSIGNED.zip.sha256
             miniapp-resources
             miniapp/wasm/Cargo.lock
+            miniapp-ui.png
