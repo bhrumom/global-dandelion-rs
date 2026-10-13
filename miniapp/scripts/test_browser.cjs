@@ -65,6 +65,11 @@ async function awaitBrowser() {
     assert.equal(await page.locator('#start').isDisabled(), true);
     assert.match(await page.locator('#selection-summary').textContent(), /超出限制/); count++;
     await page.screenshot({ path: 'miniapp-ui.png', fullPage: true });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot({ path: 'miniapp-ui-dark.png', fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); count++;
+    await page.screenshot({ path: 'miniapp-ui-narrow.png', fullPage: true });
     console.log(JSON.stringify({ tests: count, source: process.env.TESTED_COMMIT, result: 'pass', scope: 'offline-browser-fixture-not-Fabushi-installed-acceptance' }));
   } finally { await context.close(); await instance.close(); }
 }

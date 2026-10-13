@@ -13,7 +13,7 @@
     <section class="intro"><h2>让每一块数据，都有据可查。</h2><p>主动选择文件，使用原生 Rust 协议在本地分块并逐包校验。文件内容留在当前沙箱，不上传，不修改原文件。</p></section>
     <section class="workspace" aria-label="离线工作台">
       <div class="card"><div class="section-head"><h2>01 · 选择文件</h2><span>最多 128 个 · 合计 1 GiB</span></div>
-        <label class="file-picker" for="files"><strong>＋ 选择本地文件</strong><span>读取只在你点击开始后进行</span></label><input id="files" type="file" multiple>
+        <label class="file-picker" for="files"><strong>＋ 选择本地文件</strong><span>读取只在你点击开始后进行</span><input id="files" type="file" multiple aria-label="选择本地文件"></label>
         <ul id="selection" aria-label="已选择文件"></ul><p id="selection-summary">还没有选择文件</p>
       </div>
       <div class="card"><div class="section-head"><h2>02 · 分块校验</h2><span>GDAN v2 · BLAKE3</span></div>

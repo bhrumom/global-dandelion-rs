@@ -65,4 +65,4 @@ jobs:
             global-dandelion-UNSIGNED.zip.sha256
             miniapp-resources
             miniapp/wasm/Cargo.lock
-            miniapp-ui.png
+            miniapp-ui*.png

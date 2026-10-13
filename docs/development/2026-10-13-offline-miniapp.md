@@ -31,5 +31,21 @@ to /v1/extensions/review/fabapp/sign returns 404, confirming that the protected
 OMA signer route is absent, rather than merely waiting for authentication.
 Legacy tar-gz/local-web listings cannot substitute for OMA signed .fabapp trust.
 
-All new acceptance is pending. GitHub CI browser fixtures are preparation evidence,
-not public trust approval or signed Fabushi installed-runtime acceptance.
+GitHub Actions run 38357653707 on 2ebfe26113e0218413730c95d406549d3cad6b66
+passed Wasm compilation, format/Clippy, 7 package adversarial tests and 11 offline
+browser assertions. Matching native run 38357653705 passed all four required jobs.
+Artifact 11793656345 records the unsigned preparation, dependency lockfile and
+UI screenshot; GitHub ZIP digest is
+465e4a45dd2a9e942a646ac84b7c78f61c17499dea0e9d5327b9e2151c6d729e.
+The dependency lockfile is copied unchanged into miniapp/wasm/Cargo.lock;
+subsequent runs must resolve with --locked. The UI file-picker rendering and
+narrow/dark screenshots require a new exact-head run after this record.
+
+GitHub CI browser fixtures are preparation evidence, not public trust approval
+or signed Fabushi installed-runtime acceptance. AC-M3/4/5 remain blocked.
+The last inspected Backend signing preflight (38156689037, 2026-10-11)
+reported all five production signing/review secret names missing; a fresh
+read-only Actions preflight has been requested rather than assuming that old
+snapshot still holds. Organization secret metadata is not accessible through
+the current GitHub token (403), so repo-secret lists alone do not prove absence
+of organization-provided deployment credentials.
