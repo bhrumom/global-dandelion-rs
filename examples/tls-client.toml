@@ -1,0 +1,20 @@
+[scanner]
+roots = ["tests/fixtures"]
+
+[transport]
+mode = "tls"
+
+[transport.tls]
+ca_file = "credentials/ca.pem"
+certificate_file = "credentials/client.pem"
+private_key_file = "credentials/client.key"
+wan_enabled = false
+wan_allowlist = []
+timeout_ms = 10000
+connect_attempts = 1
+
+[[transport.tls.peers]]
+address = "127.0.0.1:20000"
+server_name = "localhost"
+class = "private"
+authorized = true

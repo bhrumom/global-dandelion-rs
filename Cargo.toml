@@ -1,0 +1,66 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+repository = "https://github.com/bhrumom/global-dandelion-rs"
+
+[workspace.dependencies]
+dandelion-compat = { path = "crates/dandelion-compat", version = "=0.1.0" }
+csv = "1.4.0"
+md-5 = "0.11.0"
+
+dandelion-hotspot = { path = "crates/dandelion-hotspot", version = "=0.1.0" }
+dandelion-updater = { path = "crates/dandelion-updater", version = "=0.1.0" }
+ring = "0.17.14"
+semver = "1.0.28"
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "rustls"] }
+
+tokio-rustls = { version = "0.26.5", default-features = false, features = ["ring"] }
+rustls = { version = "0.23.44", default-features = false, features = ["ring", "std"] }
+
+dandelion-tui = { path = "crates/dandelion-tui", version = "=0.1.0" }
+dandelion-state = { path = "crates/dandelion-state", version = "=0.1.0" }
+dandelion-core = { path = "crates/dandelion-core", version = "=0.1.0" }
+dandelion-config = { path = "crates/dandelion-config", version = "=0.1.0" }
+dandelion-packet = { path = "crates/dandelion-packet", version = "=0.1.0" }
+dandelion-scanner = { path = "crates/dandelion-scanner", version = "=0.1.0" }
+dandelion-pacing = { path = "crates/dandelion-pacing", version = "=0.1.0" }
+dandelion-transport = { path = "crates/dandelion-transport", version = "=0.1.0" }
+dandelion-platform-linux = { path = "crates/dandelion-platform-linux", version = "=0.1.0" }
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8.23"
+clap = { version = "4.6", features = ["derive", "env"] }
+clap_complete = "4.6"
+tokio = { version = "1.50", default-features = false, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal", "io-util", "process"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+blake3 = "1.8"
+walkdir = "2.5"
+rustix = { version = "1.1", features = ["fs"] }
+getrandom = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tempfile = "3.23"
+proptest = "1.9"
+criterion = "0.7"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
+[profile.dev]
+debug = 0
+incremental = false

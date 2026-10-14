@@ -1,61 +1,52 @@
-# Python -> Rust Parity Ledger
+# Python -> Rust migration and acceptance ledger
 
-Baseline: `bhrum/global@aa7f3720c42856f0e1d18742f78fba156227ee79`
+Authoritative source: `bhrum/global@aa7f3720c42856f0e1d18742f78fba156227ee79`,
+blob `54bf6226eb80d1ef6c4f6087fb02579141ab134f`.
 
-This ledger is the migration evidence index. Status values:
+This inventory preserves all 37 original responsibility rows. `implemented` means
+production code and real test paths exist; it is NOT full hardware/cutover sign-off.
+The required physical, release-trust and controlled-baseline evidence is tracked
+separately in [acceptance-gates.json](../acceptance-gates.json). Inspect exact-HEAD CI.
+A green foundation gate must never be described as unconditional full replacement.
 
-- `planned`
-- `mapped`
-- `redesigned`
-- `legacy-adapter`
-- `verified`
-- `intentionally-removed`
-- `not-applicable`
-
-A row may move to `verified` only when implementation and test/benchmark evidence are linked.
-
-| Python responsibility | Python symbol / area | Rust destination | Status | Evidence |
+| Responsibility | Classification | Code status | Verification scope | Destination |
 |---|---|---|---|---|
-| network time metadata | `sync_network_time` | platform/config telemetry; no implicit host clock mutation | redesigned | pending |
-| disk partitions | `linux_get_disk_partitions` | `dandelion-platform-linux` | planned | pending |
-| disk usage | `linux_get_disk_usage` | `dandelion-platform-linux` | planned | pending |
-| network interfaces | `linux_get_net_interfaces` | `dandelion-platform-linux` | planned | pending |
-| connection summary | `linux_get_net_connections` | `dandelion-platform-linux` | planned | pending |
-| speed statistics | `update_speed_stats` and helpers | `dandelion-telemetry` | planned | pending |
-| time-based pacing | `TimeBasedPacerThread` | `dandelion-pacing` | planned | pending |
-| throttled surface scan | `ThrottledSurfaceScanThread` | scanner compatibility module | planned | pending |
-| metadata scan | `MetadataScanThread` | `dandelion-scanner` | planned | pending |
-| hotspot broadcast/control | `HotspotDataBroadcaster` | `dandelion-hotspot` + Linux adapter | planned | pending |
-| updater | `AutoUpdateThread` | `dandelion-updater` | redesigned | pending |
-| rename effect | `RenamerThread` | optional compatibility component with journal | redesigned | pending |
-| loopback sender | `LoopbackSenderThread` | loopback transport | planned | pending |
-| loopback receiver | `LoopbackReceiverThread` | verifier/loopback transport | planned | pending |
-| configured VPS sender | `VpsSenderThread` | private/VPS transport | planned | pending |
-| LAN broadcaster | `ForcedNetworkScanThread` | LAN transport | redesigned | pending |
-| headless logging | `HeadlessLogPrinter` | tracing subscriber | redesigned | pending |
-| status display | `StatusDisplayThread` | `dandelion-tui` | planned | pending |
-| startup drive scan | `StartupDriveScanner` | `dandelion-scanner` + Linux adapter | planned | pending |
-| external drive monitor | `ExternalDriveMonitorThread` | Linux drive observer | planned | pending |
-| file scan/chunk production | `FileScannerThread` | scanner + bounded chunk pipeline | redesigned | pending |
-| WAN worker pool | `ChunkSenderWorker` | transport tasks | redesigned | pending |
-| dynamic worker manager | `WorkerManagerThread` | supervisor/pacing concurrency permits | intentionally-removed | pending |
-| persistent state | `load_state/save_state` | `dandelion-state` | planned | pending |
-| country CSV database | `load_country_database` | optional target metadata importer | planned | pending |
-| random CIDR target generation | `generate_ip_from_cidr` use for unsolicited WAN targets | none as default behavior | intentionally-removed | pending |
-| internet connectivity check | `check_internet_connectivity` | target-aware health checks | redesigned | pending |
-| neighbour discovery | `scan_network_devices` | Linux observer; not auto-targeting | redesigned | pending |
-| target pool preparation | `prepare_target_ip_pool` | validated explicit target policy | redesigned | pending |
-| per-packet WAN send loop | `send_chunk_in_batches` | authorized transport + pacing + optional batching | redesigned | pending |
-| interrupted rename restore | `restore_interrupted_files` | compatibility journal recovery | planned | pending |
-| process orchestration | `main` | top-level Supervisor | redesigned | pending |
+| time-metadata | redesigned | implemented | current-ci | platform time / authenticated peer control |
+| host-clock-mutation | intentionally-removed | removed | documented-exclusion | none |
+| disk-partitions | redesigned | implemented | current-ci | platform-linux inventory |
+| disk-space | redesigned | implemented | current-ci | platform-linux |
+| network-interfaces | redesigned | implemented | current-ci | platform-linux inventory |
+| connections | redesigned | implemented | current-ci | platform-linux inventory |
+| structured-logging | redesigned | implemented | current-ci | app |
+| progress-ui | redesigned | implemented | current-ci | dandelion-tui |
+| live-speed-stats | redesigned | implemented | current-ci | core telemetry + tui |
+| day-night-pacing | redesigned | implemented | current-ci | core schedule + pacing |
+| constant-rate | redesigned | implemented | current-ci | pacing |
+| surface-scan | redesigned | implemented | current-ci | scanner + ReadVerifier |
+| metadata-scan | redesigned | implemented | current-ci | scanner metadata mode |
+| hotspot | redesigned | implemented | physical-hotspot-required | hotspot + Linux ProcessRunner |
+| release-version | redesigned | implemented | current-ci | dandelion-updater |
+| updater | redesigned | implemented | production-trust-required | signed updater + opt-in systemd timer |
+| rename-effect | legacy-adapter | implemented | current-ci | platform-linux legacy link capability |
+| loopback-send | redesigned | implemented | current-ci | transport |
+| loopback-receive | redesigned | implemented | current-ci | transport |
+| private-vps | redesigned | implemented | current-ci | mutual TLS transport |
+| lan | redesigned | implemented | current-ci | mutual TLS transport |
+| startup-drive-scan | redesigned | implemented | physical-hotplug-required | explicit mount policy + service |
+| external-drive-monitor | redesigned | implemented | physical-hotplug-required | mount diff observer + service |
+| source-scan | redesigned | implemented | current-ci | scanner |
+| chunk-framing | redesigned | implemented | current-ci | packet |
+| wan-workers | redesigned | implemented | current-ci | mutual TLS transport |
+| worker-explosion | intentionally-removed | removed | documented-exclusion | Supervisor |
+| shutdown | redesigned | implemented | current-ci | Supervisor |
+| state | redesigned | implemented | current-ci | dandelion-state |
+| country-metadata | redesigned | implemented | current-ci | dandelion-compat country |
+| random-public-targets | redesigned | implemented | current-ci | authorized TargetPool + TargetSelector |
+| target-health | redesigned | implemented | current-ci | transport peer receipts / socket meter |
+| neighbour-discovery | redesigned | implemented | current-ci | read-only platform inventory |
+| target-policy | redesigned | implemented | current-ci | core exact-address capability |
+| batch-send | redesigned | implemented | controlled-cutover-required | bounded authenticated peer fanout |
+| wire-budget | redesigned | implemented | current-ci | core + Supervisor |
+| orchestration | redesigned | implemented | current-ci | app |
 
-## Evidence rules
-
-For every verified row, add links or commit SHAs for:
-
-1. implementation;
-2. unit/integration/parity test;
-3. benchmark when the row is performance-sensitive;
-4. ADR when behavior intentionally changes architecture or protocol.
-
-The ledger is expected to grow more granular as implementation proceeds.
+[Machine-readable inventory](parity.json) contains original symbols, ranges, reasons and concrete evidence paths. Two unsafe legacy defaults remain deliberately removed. Authorized-pool public target selection is implemented with bounded sequential, randomized and deterministic-seeded selection, followed by mandatory policy revalidation in shipping TLS composition. The unrestricted public Internet remains outside the implicit authorization scope. No pending domain is replaced by a no-op command. Some redesigned behaviors intentionally differ: lifetime rather than automatic monthly budgets, authenticated unicast rather than unsolicited broadcasts, file-level rather than byte-level resume, and signed staging rather than active binary self-overwrite.

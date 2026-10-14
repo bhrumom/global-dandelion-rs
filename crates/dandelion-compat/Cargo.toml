@@ -1,0 +1,13 @@
+[package]
+name = "dandelion-compat"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+[lints]
+workspace = true
+[dependencies]
+dandelion-core.workspace = true
+serde.workspace = true
+csv.workspace = true
+md-5.workspace = true

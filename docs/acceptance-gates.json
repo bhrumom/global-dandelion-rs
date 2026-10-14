@@ -1,0 +1,110 @@
+{
+  "schema_version": 2,
+  "full_replacement_verified": false,
+  "required_gates": [
+    {
+      "id": "current-ci",
+      "requirement": "All automated gates pass on the exact current tested commit; extracted x86_64/aarch64 artifacts, real CLI scenarios, and packaged systemd lifecycle acceptance are verified."
+    },
+    {
+      "id": "physical-hotspot",
+      "requirement": "Actual Linux Wi-Fi AP activation, interruption and restoration with representative adapter/driver; mock tests are insufficient."
+    },
+    {
+      "id": "physical-hotplug",
+      "requirement": "Actual mount removal/replacement/reinsertion during scan, no wrong-device resume, and recovery/service behavior on representative hardware."
+    },
+    {
+      "id": "controlled-cutover",
+      "requirement": "Pinned equivalent whole-program scan/read/transfer workloads on controlled identical hardware; CPU/GiB, sustained throughput, true peak RSS and shutdown distributions. Packet-only shared CI samples are insufficient."
+    },
+    {
+      "id": "production-release-trust",
+      "requirement": "Operator-provisioned trusted signing key, actual signed release origin/artifacts, staged activation and rollback in the deployment environment."
+    }
+  ],
+  "evidence_delivery": "Pass the independently reviewed external evidence manifest to scripts/check_parity.py --require-complete --evidence FILE. A manifest-only pass is insufficient; every gate report is re-read and digest/bindings/gate semantics are verified, every reviewer attestation is re-fetched from the canonical GitHub PR review API, and current-ci additionally re-fetches the canonical GitHub Actions run, required jobs and artifact metadata. GITHUB_TOKEN is optional for public repositories but recommended to avoid anonymous API rate limits.",
+  "evidence_contract": {
+    "schema_version": 4,
+    "hash_algorithm": "sha256",
+    "max_manifest_bytes": 1048576,
+    "max_report_bytes": 16777216,
+    "required_gate_fields": [
+      "gate_id",
+      "result",
+      "report",
+      "report_sha256",
+      "reviewed_by",
+      "reviewed_report_sha256",
+      "reviewed_commit",
+      "review_decision",
+      "review_reference",
+      "review_body_sha256"
+    ],
+    "required_report_fields": [
+      "schema_version",
+      "gate_id",
+      "tested_commit",
+      "result",
+      "performed_by",
+      "performed_actor"
+    ],
+    "reviewer_rule": "reviewed_by must match the live GitHub PR review actor and differ case-insensitively from both report.performed_actor and report.performed_by; the live review must be APPROVED on the exact tested commit, belong to evidence_contract.review_scope, and its JSON body attestation must bind gate ID, report SHA-256, tested commit and approve decision",
+    "report_rule": "report must be a regular file opened without following symlinks; its SHA-256, gate_id, tested_commit, pass result and gate-specific semantic requirements must verify",
+    "gate_specific_semantics": {
+      "current-ci": [
+        "canonical GitHub Actions run is re-fetched by run ID from review_scope.repository",
+        "live run is a completed successful pull_request run for review_scope.pull_request, exact tested commit and current_ci_scope.workflow_path",
+        "all four required jobs are re-fetched and successful",
+        "x86_64 and aarch64 artifact ID/name/GitHub ZIP digest/workflow head match live run artifact metadata",
+        "successful exact-commit workflow",
+        "all four required jobs successful",
+        "x86_64 and aarch64 artifacts bind workflow head and BUILD-INFO to tested commit",
+        "packaged python-rust-comparison rust_sha binds the same tested commit",
+        "GitHub ZIP, outer tar archive and packaged binary SHA-256 digests are recorded",
+        "outer checksum, inner SHA256SUMS and packaged self-test verified",
+        "packaged systemd lifecycle acceptance is verified for both native artifacts"
+      ],
+      "physical-hotspot": [
+        "real non-virtual Wi-Fi hardware identity, interface and driver",
+        "AP capability verified",
+        "real plan/apply/active verification",
+        "interruption exercised",
+        "owned-profile rollback verified",
+        "previous connection restored when one existed"
+      ],
+      "physical-hotplug": [
+        "real removable/hotplug original and replacement device identities",
+        "unmount during active scan and original reinsertion exercised",
+        "replacement mounted at the same path",
+        "old checkpoint rejected for replacement device",
+        "resume scope changed and service recovered"
+      ],
+      "controlled-cutover": [
+        "workflow artifact, BUILD-INFO and packaged comparison bind exact tested commit",
+        "artifact architecture/ID/name, GitHub ZIP SHA-256, outer tar SHA-256 and binary SHA-256 exactly match one current-ci artifact",
+        "pinned Python source commit/blob verified",
+        "at least three repetitions",
+        "same non-empty fixture",
+        "metadata/read/transfer and shutdown raw samples for Python and Rust",
+        "complete transfer integrity"
+      ],
+      "production-release-trust": [
+        "real deployment environment",
+        "non-synthetic production signing identity and fingerprint",
+        "signature verified",
+        "actual production release origin and artifact digest/provenance",
+        "staging, activation, health verification, rollback and post-rollback health verified"
+      ]
+    },
+    "review_reference_rule": "review_reference must exactly target the configured evidence_contract.review_scope repository and pull request using https://api.github.com/repos/{owner}/{repo}/pulls/{pr}/reviews/{id}. Full-replacement verification re-fetches that review, verifies numeric ID/state/commit/reviewer, requires the returned pull_request_url to match the configured scope, and checks review_body_sha256 so foreign-repository, foreign-PR, edited, dismissed or stale reviews fail closed.",
+    "review_scope": {
+      "repository": "bhrumom/global-dandelion-rs",
+      "pull_request": 1
+    },
+    "current_ci_scope": {
+      "workflow_path": ".github/workflows/ci.yml"
+    },
+    "current_ci_live_rule": "current-ci is not trusted from report fields alone: run_id is re-fetched from evidence_contract.review_scope.repository; the run must be a completed successful pull_request run for review_scope.pull_request on the exact tested commit and current_ci_scope.workflow_path; all four required jobs are re-fetched and must succeed; each reported artifact ID/name/GitHub ZIP digest/workflow head is matched to live run artifact metadata"
+  }
+}

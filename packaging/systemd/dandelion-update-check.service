@@ -1,0 +1,16 @@
+[Unit]
+Description=Verify Global Dandelion signed release metadata (no activation)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=dandelion
+Group=dandelion
+EnvironmentFile=/etc/dandelion/update-check.conf
+ExecStart=/usr/bin/dandelion update check --manifest-url ${MANIFEST_URL} --signature-url ${SIGNATURE_URL} --public-key ${PUBLIC_KEY_FILE} --json
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+UMask=0077

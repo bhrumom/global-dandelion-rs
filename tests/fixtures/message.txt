@@ -1,0 +1,1 @@
+Global Dandelion: bounded, cancellable, verified local transfer.
