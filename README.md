@@ -191,5 +191,20 @@ cutover measurements remain separate acceptance gates, never implied by a green 
 [development record](docs/development/2026-09-28-complete-migration.md),
 [operations](docs/operations.md), [benchmark methodology](docs/benchmarks.md).
 Python source pinned to `bhrum/global@aa7f3720c42856f0e1d18742f78fba156227ee79`,
-blob `54bf6226eb80d1ef6c4f6087fb02579141ab134f`. Repository access does not assign a
-new source license; workspace publishing remains disabled.
+blob `54bf6226eb80d1ef6c4f6087fb02579141ab134f`. The owner selected proprietary
+distribution on 2026-10-13; see [LICENSE](LICENSE). Repository access does not
+grant source reuse rights. Cargo workspace publishing remains disabled.
+
+## Fabushi offline mini app
+
+The Desktop Web/Wasm packet workbench under `miniapp/` reuses the same GDAN v2
+encoder/decoder from this native implementation. Explicit file selection,
+bounded local packet verification, cancel and report export need no network.
+This interface does not perform native LAN/WAN transfer, hotspot changes or
+system scanning. Those functions retain their native owners and require a
+reviewed Fabushi Host adaptation before mini-app parity can be claimed.
+
+See [mini-app spec](docs/specs/fabushi-miniapp.md) and the Marketplace draft.
+Unsigned CI preparation and ephemeral test-signing fixtures are not trusted
+production packages or evidence of public publication. Managed signing,
+publisher/scan/review and packaged Fabushi offline acceptance are release gates.

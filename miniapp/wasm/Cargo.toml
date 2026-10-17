@@ -1,0 +1,25 @@
+[package]
+name = "dandelion-web-adapter"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+license-file = "../../LICENSE"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+dandelion-core = { path = "../../crates/dandelion-core" }
+dandelion-packet = { path = "../../crates/dandelion-packet" }
+wasm-bindgen = "=0.2.129"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
