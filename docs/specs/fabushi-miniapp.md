@@ -1,6 +1,9 @@
 # Global Dandelion in Fabushi — offline package specification
 
-Status: active; release acceptance pending. Date: 2026-10-13.
+Status: published in the Fabushi Marketplace as `bhrumom/global-dandelion`
+(web-miniapp) 0.1.0, channel `preview`. Publication recorded 2026-10-17;
+installed-client acceptance for later Desktop source remains a separate gate.
+Date: 2026-10-13.
 Baseline: PR #1 at aa6436315cde7b66868b0592d1c67b4590ebd1f9,
 native architecture Spec 2.1. Parent: Fabushi OMA-001/FPM-001 at
 371b72f1cd20de03dc4dff9a15ed761054968093.
@@ -68,18 +71,18 @@ managed signer after release prerequisites. No signing secrets on PR workflows.
 
 ## Acceptance, publication and rollback
 
-| Gate | Evidence needed |
+| Gate | Status and evidence |
 | --- | --- |
-| AC-M1 | Exact-head Rust/Wasm/browser tests proving M01..06; fresh context with network denied. |
-| AC-M2 | Complete resources/signature/digests plus mutation/path/extra-file rejection tests. |
-| AC-M3 | Owner-selected license, verified publisher binding, actual protected signer, scans/reviewer approval and immutable public catalog entry. |
-| AC-M4 | Real signed packaged Fabushi install, offline restart, two-account/app isolation, update/rollback/uninstall through existing owners (OMA AC-01..06/08..10). |
-| AC-M5 | Native capability adaptation and real evidence before any full-feature mini-app claim; original migration/hardware gates unchanged. |
+| AC-M1 | Met for fce746baecc6bbd9f4b12d5862d886cf7f72eda5: the Offline Mini App workflow passed Rust/Wasm build, adversarial package tests and network-denied browser contracts; the same source is now merged to main. |
+| AC-M2 | Met: signed package `de10e02115415908f827723457817e51cb4f39aa5ca68798da824fecc483118a`, 453093 bytes, all ten resource digests and the Ed25519 manifest signature verified against the published trust key; mutation, traversal, extra-file and wrong-key fixtures are rejected. |
+| AC-M3 | Met: owner-selected LicenseRef-Proprietary, managed key `fabushi-marketplace-managed-20261013-1` (trust epoch 1), protected review run 38505804519, immutable public entry `bhrumom/global-dandelion:web-miniapp` 0.1.0, channel preview, revoked false. |
+| AC-M4 | Met for these exact immutable bytes on a historical Desktop build (installed lifecycle run 38830168249: signed Wasm run, report, OS-network-disabled cold restart, preference retention, remove and online reinstall). Not a pass for later Desktop source: the factory A/B/A and promotion gates in the Desktop ledger stay open. |
+| AC-M5 | Pending: LAN/WAN transfer, hotspot, system scanning and service installation still require a reviewed native Host adaptation. The listing describes the preview scope only. |
 
-All gates initially pending; lack of signer, approved registry, supported Host,
-device or license is blocked, never pass. Rollout preview only with accurate
-description; bad version uses existing Registry revocation and last-good Host
-rollback. Never erase app user data on failed installation/update.
+Publication is recorded in `docs/evidence/2026-10-17-publication.md`. Absent
+evidence is blocked, never passed. Rollout is preview only with the accurate
+description above; a bad version uses existing Registry revocation and last-good
+Host rollback. Never erase app user data on failed installation/update.
 Record source SHA, Actions URLs, package and trust fingerprints, review IDs,
 Host build/source and acceptance artifacts. No selected private data in telemetry.
 
