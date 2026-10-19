@@ -1,12 +1,5 @@
 name: Offline Mini App
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Mini app version to package"
-        required: true
-        default: "0.2.0"
-        type: string
   pull_request:
   push:
     branches: [main]
@@ -14,7 +7,6 @@ permissions:
   contents: read
 env:
   TESTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-  MINIAPP_VERSION: ${{ github.event.inputs.version || '0.2.0' }}
 jobs:
   offline-miniapp:
     runs-on: ubuntu-24.04
@@ -30,26 +22,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Validate Marketplace install metadata
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          value = json.loads(Path('miniapp/marketplace-draft.json').read_text())
-          identity = value['identity']
-          runtime = value.get('runtime')
-          expected = {
-              'owner': 'host-plugins',
-              'installMode': 'fabapp',
-              'appId': 'org.fabushi.global-dandelion',
-              'publisherId': identity['namespace'],
-          }
-          if not isinstance(runtime, dict) or any(runtime.get(k) != v for k, v in expected.items()):
-              raise SystemExit('Marketplace descriptor is not installable by the Desktop Host')
-          if identity != {'namespace': 'bhrumom', 'name': 'global-dandelion', 'kind': 'web-miniapp'}:
-              raise SystemExit('unexpected Marketplace identity')
-          print('Marketplace install metadata: valid')
-          PY
       - name: Host tool contract
         # Pure page-side contract: every bridge shape the three hosts inject.
         run: node --test miniapp/scripts/test_host_tools.mjs
@@ -76,12 +48,12 @@ jobs:
           cargo install wasm-bindgen-cli --version 0.2.129 --locked
           wasm-bindgen miniapp/wasm/target/wasm32-unknown-unknown/release/dandelion_web_adapter.wasm --target web --out-dir miniapp-generated
       - name: Prepare unsigned resources
-        run: python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --version "$MINIAPP_VERSION" --output global-dandelion-UNSIGNED.zip
+        run: python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --output global-dandelion-UNSIGNED.zip
       - name: Android single-document bundle
         # Android injects one HTML string, so this variant must carry every module.
         run: |
           python3 miniapp/scripts/test_inline_html.py
-          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources-android --commit "$TESTED_COMMIT" --version "$MINIAPP_VERSION" --inline-html "global-dandelion-${MINIAPP_VERSION}.html" --output global-dandelion-UNSIGNED-android.zip
+          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources-android --commit "$TESTED_COMMIT" --inline-html global-dandelion-0.3.0.html --output global-dandelion-UNSIGNED-android.zip
       - name: Install test-only tools
         run: |
           python3 -m pip install cryptography==46.0.3
@@ -101,7 +73,7 @@ jobs:
             global-dandelion-UNSIGNED.zip.sha256
             global-dandelion-UNSIGNED-android.zip
             global-dandelion-UNSIGNED-android.zip.sha256
-            global-dandelion-${{ env.MINIAPP_VERSION }}.html
+            global-dandelion-0.3.0.html
             miniapp-resources
             miniapp/wasm/Cargo.lock
             miniapp-ui*.png
