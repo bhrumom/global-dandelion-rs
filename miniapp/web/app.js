@@ -23,7 +23,7 @@ q('start').onclick = async () => {
   if (!ready || running || !selected.length) return;
   const token = ++generation, files = [...selected], payloadLimit = max_payload_bytes();
   const transferId = crypto.getRandomValues(new Uint8Array(16));
-  const summary = { schemaVersion: 1, appVersion: '0.1.0', verification: 'local-packet-roundtrip', networkSent: false, status: 'running', files: [], packets: 0, verifiedBytes: 0 };
+  const summary = { schemaVersion: 1, appVersion: '0.2.0', verification: 'local-packet-roundtrip', networkSent: false, status: 'running', files: [], packets: 0, verifiedBytes: 0 };
   const total = files.reduce((sum, file) => sum + file.size, 0);
   report = null; running = true; controls(); q('results').replaceChildren();
   try {

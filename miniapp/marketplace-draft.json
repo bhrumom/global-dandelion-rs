@@ -2,15 +2,21 @@
   "status": "draft",
   "identity": { "namespace": "bhrumom", "name": "global-dandelion", "kind": "web-miniapp" },
   "displayName": "Global Dandelion 离线工作台",
-  "description": "复用原生 Rust GDAN v2/BLAKE3 的离线文件分块与逐包完整性校验工作台。文件仅由用户选择，内容不上传。此 Desktop 预览不包含 LAN/WAN 传输、热点或系统扫描。",
+  "description": "复用原生 Rust GDAN v2/BLAKE3 的离线文件分块与逐包完整性校验工作台。文件仅由用户选择，内容不上传。一套 Web 资源同时运行在 Desktop、iOS 与 Android 宿主；传输、系统扫描与热点面板只在宿主声明对应能力时出现，未声明时整块隐藏而不是降级为隐式权限。",
   "publisher": { "id": "bhrumom", "verified": false, "verificationEvidence": [] },
   "sourceUrl": "https://github.com/bhrumom/global-dandelion-rs",
   "licenseSpdx": "MIT OR Apache-2.0",
   "categories": ["developer-tools", "utilities"],
-  "tags": ["offline", "rust", "wasm", "file-integrity"],
-  "release": { "version": "0.1.0", "channel": "preview", "platforms": ["desktop"], "minHostApi": 1, "requestedCapabilities": [] },
+  "tags": ["offline", "rust", "wasm", "file-integrity", "cross-platform"],
+  "release": { "version": "0.2.0", "channel": "preview", "platforms": ["desktop", "ios", "android"], "minHostApi": 1, "requestedCapabilities": [] },
   "offlineCore": true,
   "networkPolicy": { "mode": "deny", "allowedOrigins": [] },
+  "hosting": {
+    "provider": "github-releases",
+    "repository": "bhrumom/global-dandelion-rs",
+    "bytesHostedOffRegistry": true,
+    "signedBy": "fabushi-marketplace-managed-20261013-1"
+  },
   "publicationEligible": false,
   "publicationBlockers": ["catalog-authorized-production-signature", "publisher-binding-and-scan-review", "packaged-Fabushi-install-offline-isolation-lifecycle-acceptance"]
 }

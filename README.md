@@ -197,14 +197,21 @@ remains disabled.
 
 ## Fabushi offline mini app
 
-The Desktop Web/Wasm packet workbench under `miniapp/` reuses the same GDAN v2
-encoder/decoder from this native implementation. Explicit file selection,
+One Web/Wasm bundle under `miniapp/` runs on three hosts. It reuses the same GDAN
+v2 encoder/decoder from this native implementation: explicit file selection,
 bounded local packet verification, cancel and report export need no network.
-This interface does not perform native LAN/WAN transfer, hotspot changes or
-system scanning. Those functions retain their native owners and require a
-reviewed Fabushi Host adaptation before mini-app parity can be claimed.
 
-See [mini-app spec](docs/specs/fabushi-miniapp.md) and the Marketplace draft.
-Unsigned CI preparation and ephemeral test-signing fixtures are not trusted
-production packages or evidence of public publication. Managed signing,
-publisher/scan/review and packaged Fabushi offline acceptance are release gates.
+Host capabilities are declared, not assumed. `miniapp/web/host-tools.js` publishes
+a `fabushi.miniapp.tools.v1` contract; panels for transfer, system metadata scan
+and hotspot control appear only when the host advertises that capability, and stay
+hidden otherwise rather than degrading into an implicit permission. The Desktop
+host bridges them through a preload `contextBridge`, iOS through its WebMCP host,
+Android through `FabushiWebMcpNative`. A host that offers nothing still gets the
+full offline workbench.
+
+Package bytes are hosted on GitHub Releases while the release signature and the
+pinned trust root stay with the Fabushi Marketplace — see
+[release and hosting](miniapp/RELEASE.md). Unsigned CI preparation and ephemeral
+test-signing fixtures are not trusted production packages or evidence of public
+publication. Managed signing, publisher/scan/review and packaged Fabushi offline
+acceptance are release gates.

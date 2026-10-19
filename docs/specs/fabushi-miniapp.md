@@ -1,9 +1,6 @@
 # Global Dandelion in Fabushi — offline package specification
 
-Status: published in the Fabushi Marketplace as `bhrumom/global-dandelion`
-(web-miniapp) 0.1.0, channel `preview`. Publication recorded 2026-10-17;
-installed-client acceptance for later Desktop source remains a separate gate.
-Date: 2026-10-13.
+Status: active; release acceptance pending. Date: 2026-10-19.
 Baseline: PR #1 at aa6436315cde7b66868b0592d1c67b4590ebd1f9,
 native architecture Spec 2.1. Parent: Fabushi OMA-001/FPM-001 at
 371b72f1cd20de03dc4dff9a15ed761054968093.
@@ -15,19 +12,22 @@ Marketplace. Reuse PR #1's actual Rust packet v2 implementation, rather than
 creating an unrelated checksum demo or a second transfer engine. The current
 native CLI and 37-row migration ledger remain authoritative and unchanged.
 Native code completion and full-replacement hardware/release acceptance remain
-separate. The package is a **Desktop offline packet workbench** first; the
-full Linux CLI is not secretly executed/downloaded by the Web surface.
+separate. The package is a **cross-platform offline packet workbench**: one Web
+bundle, three hosts. The full Linux CLI is not secretly executed/downloaded by the
+Web surface.
 
 Offline scope: user-selected files, bounded sequential packet construction,
 packet integrity verification, progress/cancel, report export and source/permission
 inspection. Network transfer, mounts, hotspot, service installation and native
 update require a reviewed native Host/Connector adaptation before mini-app parity
-can be claimed. They must be explicitly unavailable in this initial Web surface,
-not mocked as successful. Public listing cannot claim full native feature parity.
+can be claimed. They are reachable only through the declared tool contract below,
+never mocked as successful, and never silently granted. Public listing cannot claim
+full native feature parity.
 
 Existing dandelion-core/dandelion-packet own domain and codec. A small
 miniapp/wasm adapter compiles those same sources to WebAssembly; it owns only
 browser bindings. miniapp/web owns Web-standard File APIs and rendering.
+miniapp/web/host-tools.js owns the capability contract shared by all three hosts.
 Fabushi Host owns trusted package installation, origins/account storage and
 permissions; existing Backend Marketplace owns publisher/review/signing/catalog.
 No second Registry, native runtime, shell bridge or raw CDP/filesystem grant.
@@ -44,12 +44,14 @@ No second Registry, native runtime, shell bridge or raw CDP/filesystem grant.
 | GD-M06 | Export report only by explicit action; settings-only Web storage, visible quota failure, delete control. Host app/account isolation remains a package acceptance gate. |
 | GD-M07 | Strict .fabapp v1/JCS/Ed25519 domain fabushi.fabapp.manifest.v1 followed by NUL, complete file SHA256/size/MIME table, packageClass catalog, no requested native capabilities, network deny. |
 | GD-M08 | Managed existing catalog-authorized publisher key; no automatically generated production key. Scan/moderation/release signatures are separate from package signing. |
-| GD-M09 | Desktop preview only until each other platform has its own OMA policy/device proof. No iOS Wasm support claim. |
+| GD-M09 | One bundle for Desktop, iOS and Android. Capability-bearing panels render only when the host advertises that capability in `fabushi.miniapp.tools.v1`; an undeclared capability hides the whole panel instead of degrading into an implicit grant. No per-platform feature claim until that platform has its own OMA policy and device proof. |
 | GD-M10 | GitHub Actions only for build/test/package/browser acceptance, record exact SHA, lockfile, artifact digests/test counts; preserve existing native gates. |
-| GD-M11 | Owner explicitly selected proprietary distribution on 2026-10-13: LICENSE/LicenseRef-Proprietary, no source reuse permission; preserve third-party notices. |
+| GD-M11 | Owner selected dual open-source distribution on 2026-10-19: `MIT OR Apache-2.0`, both texts shipped in the package; preserve third-party notices. |
+| GD-M12 | Package bytes may be hosted off-registry (GitHub Releases). The signed release payload then carries the download `url`; the host accepts only allowlisted https hosts, verifies sha256/size after download, and treats a digest mismatch as failure rather than falling back. |
 
 Proposed identity org.fabushi.global-dandelion, publisher bhrumom,
-version 0.1.0, minHostApi 1, runtime web, entrypoint index.html.
+version 0.2.0, platforms desktop/ios/android, minHostApi 1, runtime web,
+entrypoint index.html.
 These IDs require actual Marketplace namespace/key binding before publication.
 Wasm exports encode_packet and verify_packet; only explicit bounded byte arrays,
 u32 file/index, terminal flag and a 16-byte transfer ID cross the binding.
@@ -71,18 +73,18 @@ managed signer after release prerequisites. No signing secrets on PR workflows.
 
 ## Acceptance, publication and rollback
 
-| Gate | Status and evidence |
+| Gate | Evidence needed |
 | --- | --- |
-| AC-M1 | Met for fce746baecc6bbd9f4b12d5862d886cf7f72eda5: the Offline Mini App workflow passed Rust/Wasm build, adversarial package tests and network-denied browser contracts; the same source is now merged to main. |
-| AC-M2 | Met: signed package `de10e02115415908f827723457817e51cb4f39aa5ca68798da824fecc483118a`, 453093 bytes, all ten resource digests and the Ed25519 manifest signature verified against the published trust key; mutation, traversal, extra-file and wrong-key fixtures are rejected. |
-| AC-M3 | Met: owner-selected LicenseRef-Proprietary, managed key `fabushi-marketplace-managed-20261013-1` (trust epoch 1), protected review run 38505804519, immutable public entry `bhrumom/global-dandelion:web-miniapp` 0.1.0, channel preview, revoked false. |
-| AC-M4 | Met for these exact immutable bytes on a historical Desktop build (installed lifecycle run 38830168249: signed Wasm run, report, OS-network-disabled cold restart, preference retention, remove and online reinstall). Not a pass for later Desktop source: the factory A/B/A and promotion gates in the Desktop ledger stay open. |
-| AC-M5 | Pending: LAN/WAN transfer, hotspot, system scanning and service installation still require a reviewed native Host adaptation. The listing describes the preview scope only. |
+| AC-M1 | Exact-head Rust/Wasm/browser tests proving M01..06; fresh context with network denied. |
+| AC-M2 | Complete resources/signature/digests plus mutation/path/extra-file rejection tests. |
+| AC-M3 | Owner-selected license, verified publisher binding, actual protected signer, scans/reviewer approval and immutable public catalog entry. |
+| AC-M4 | Real signed packaged Fabushi install, offline restart, two-account/app isolation, update/rollback/uninstall through existing owners (OMA AC-01..06/08..10). |
+| AC-M5 | Native capability adaptation and real evidence before any full-feature mini-app claim; original migration/hardware gates unchanged. Each host proves its own capability set on device; the shared bundle proves the undeclared-capability path hides panels. |
 
-Publication is recorded in `docs/evidence/2026-10-17-publication.md`. Absent
-evidence is blocked, never passed. Rollout is preview only with the accurate
-description above; a bad version uses existing Registry revocation and last-good
-Host rollback. Never erase app user data on failed installation/update.
+All gates initially pending; lack of signer, approved registry, supported Host,
+device or license is blocked, never pass. Rollout preview only with accurate
+description; bad version uses existing Registry revocation and last-good Host
+rollback. Never erase app user data on failed installation/update.
 Record source SHA, Actions URLs, package and trust fingerprints, review IDs,
 Host build/source and acceptance artifacts. No selected private data in telemetry.
 
@@ -91,5 +93,6 @@ Host build/source and acceptance artifacts. No selected private data in telemetr
 PR #1; docs/protocol-v2.md; docs/specs/global-dandelion-rust-architecture.md;
 docs/migration/parity.json. Fabushi Desktop OMA/FPM specifications.
 Fabushi Backend docs/specs/fabapp-manifest-signing-v1.md and existing
-extension registry, artifact, signing and release owners. Latest user requests
+extension registry, artifact, signing and release owners; miniapp/RELEASE.md for
+the GitHub-hosting pipeline. Latest user requests
 on 2026-10-13: prioritize Global Dandelion and finish/list it in Marketplace.
