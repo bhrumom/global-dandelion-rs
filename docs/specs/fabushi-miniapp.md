@@ -48,9 +48,10 @@ No second Registry, native runtime, shell bridge or raw CDP/filesystem grant.
 | GD-M10 | GitHub Actions only for build/test/package/browser acceptance, record exact SHA, lockfile, artifact digests/test counts; preserve existing native gates. |
 | GD-M11 | Owner selected dual open-source distribution on 2026-10-19: `MIT OR Apache-2.0`, both texts shipped in the package; preserve third-party notices. |
 | GD-M12 | Package bytes may be hosted off-registry (GitHub Releases). The signed release payload then carries the download `url`; the host accepts only allowlisted https hosts, verifies sha256/size after download, and treats a digest mismatch as failure rather than falling back. |
+| GD-M13 | The signed Marketplace descriptor must declare `runtime.installMode=fabapp` and the same app/publisher identity as the package. A descriptor without this field is not installable on Desktop and must be rejected by release preparation before signing. |
 
 Proposed identity org.fabushi.global-dandelion, publisher bhrumom,
-version 0.2.0, platforms desktop/ios/android, minHostApi 1, runtime web,
+next corrective release 0.2.1, platforms desktop/ios/android, minHostApi 1, runtime web,
 entrypoint index.html.
 These IDs require actual Marketplace namespace/key binding before publication.
 Wasm exports encode_packet and verify_packet; only explicit bounded byte arrays,
@@ -70,6 +71,10 @@ bindings and performs codec/browser/package negative tests. Unsigned preparation
 is .zip, never installable .fabapp. Test signing uses ephemeral keys and is
 explicitly not production trust. Production .fabapp comes only from the existing
 managed signer after release prerequisites. No signing secrets on PR workflows.
+Before delivery, validate that the source descriptor contains the Host-required
+`runtime.installMode=fabapp`, `runtime.appId=org.fabushi.global-dandelion`, and
+`runtime.publisherId=bhrumom`; this metadata check does not alter the package
+manifest or signing authority.
 
 ## Acceptance, publication and rollback
 
@@ -77,7 +82,7 @@ managed signer after release prerequisites. No signing secrets on PR workflows.
 | --- | --- |
 | AC-M1 | Exact-head Rust/Wasm/browser tests proving M01..06; fresh context with network denied. |
 | AC-M2 | Complete resources/signature/digests plus mutation/path/extra-file rejection tests. |
-| AC-M3 | Owner-selected license, verified publisher binding, actual protected signer, scans/reviewer approval and immutable public catalog entry. |
+| AC-M3 | Owner-selected license, verified publisher binding, actual protected signer, scans/reviewer approval and immutable public catalog entry; the signed descriptor passes GD-M13. |
 | AC-M4 | Real signed packaged Fabushi install, offline restart, two-account/app isolation, update/rollback/uninstall through existing owners (OMA AC-01..06/08..10). |
 | AC-M5 | Native capability adaptation and real evidence before any full-feature mini-app claim; original migration/hardware gates unchanged. Each host proves its own capability set on device; the shared bundle proves the undeclared-capability path hides panels. |
 
