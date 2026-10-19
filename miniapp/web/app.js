@@ -23,7 +23,7 @@ q('start').onclick = async () => {
   if (!ready || running || !selected.length) return;
   const token = ++generation, files = [...selected], payloadLimit = max_payload_bytes();
   const transferId = crypto.getRandomValues(new Uint8Array(16));
-  const summary = { schemaVersion: 1, appVersion: '0.2.0', verification: 'local-packet-roundtrip', networkSent: false, status: 'running', files: [], packets: 0, verifiedBytes: 0 };
+  const summary = { schemaVersion: 1, appVersion: '0.3.0', verification: 'local-packet-roundtrip', networkSent: false, status: 'running', files: [], packets: 0, verifiedBytes: 0 };
   const total = files.reduce((sum, file) => sum + file.size, 0);
   report = null; running = true; controls(); q('results').replaceChildren();
   try {
@@ -130,6 +130,10 @@ if (host.capabilities.has('transfer')) {
       transferOperation = null;
     }, 1500);
   };
+  q('receive').onclick = async () => {
+    const received = await host.call('transfer.receive', { targetPoolId: q('target-pool').value, once: true });
+    setStatus('transfer-status', received.ok ? `接收已启动（${String(received.data?.operationId ?? '—').slice(0, 8)}…）。` : `接收未启动：${received.error.message}`);
+  };
   q('cancel-transfer').onclick = async () => {
     if (!transferOperation) return;
     const stopped = await host.call('transfer.cancel', { operationId: transferOperation });
@@ -137,6 +141,20 @@ if (host.capabilities.has('transfer')) {
     setStatus('transfer-status', stopped.ok ? '已请求停止传输。' : `停止失败：${stopped.error.message}`);
     transferOperation = null; q('cancel-transfer').disabled = true; q('send').disabled = false;
   };
+}
+
+for (const button of document.querySelectorAll('[data-native-tool]')) {
+  const capability = button.dataset.nativeCapability;
+  if (capability && !host.capabilities.has(capability)) button.hidden = true;
+  button.addEventListener('click', async () => {
+    const tool = button.dataset.nativeTool;
+    if (!tool) return;
+    setStatus('advanced-status', `${tool} 执行中…`);
+    const result = await host.call(tool, {});
+    setStatus('advanced-status', result.ok
+      ? `${tool} 完成：${JSON.stringify(result.data ?? {}).slice(0, 600)}`
+      : `${tool} 失败：${result.error.message}`);
+  });
 }
 
 if (host.capabilities.has('scan')) {
@@ -177,5 +195,5 @@ if (host.capabilities.has('hotspot')) {
 registerPageTools([{
   name: 'offline.state.read',
   description: '读取当前页面的本地校验状态与版本。',
-  run: () => ({ ready, running, selectedFiles: selected.length, packets: report?.packets ?? 0, verifiedBytes: report?.verifiedBytes ?? 0, appVersion: '0.2.0' }),
+  run: () => ({ ready, running, selectedFiles: selected.length, packets: report?.packets ?? 0, verifiedBytes: report?.verifiedBytes ?? 0, appVersion: '0.3.0' }),
 }]);
