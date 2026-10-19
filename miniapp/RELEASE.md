@@ -72,6 +72,30 @@ shasum -a 256 global-dandelion-0.2.0.fabapp
 | Release 已存在同名 asset 但大小不同 | 报错退出，绝不覆盖已发布字节 |
 | registry 登记失败 | 字节已上传但无签名 url，宿主回落 registry 路由（该 release 仍不可安装，因为 registry 无对应字节） |
 
+## 运维前提：registry 必须已部署最新代码
+
+`release-import` 路由（`POST /v1/extensions/review/releases/:kind/:ns/:name/:version/import`）
+不存在时，交付会在 `phase=release-import` 报 `404`。部署走 `marketplace-node-delivery.yml`：
+
+```bash
+gh workflow run marketplace-node-delivery.yml -R bhrumom/fabushi-backend --ref main
+```
+
+该 workflow 的接收端有一道**磁盘保留检查**：`/opt/dacheng-ai` 剩余空间减去新运行时
+展开体积和 SQLite 大小后，必须仍大于 `max(1GB, 总容量/20)`，否则拒绝部署并只打印
+`Restricted deployment failed: ValueError`（接收端刻意不回显具体原因）。历史 release 与
+backup 不会自动清理，攒多了就会撞上这道检查。清理（在 registry 主机上，root）：
+
+```bash
+ls -lt /opt/dacheng-ai/releases/          # 最新的那个是当前在跑的，别删
+ls -lt /opt/dacheng-ai/backups/
+sudo rm -rf /opt/dacheng-ai/releases/<旧 sha> /opt/dacheng-ai/backups/<旧备份>
+```
+
+当前生效的 release 由
+`/etc/systemd/system/dacheng-ai-backend.service.d/zz-fabushi-canonical-release.conf`
+里的 `WorkingDirectory` 决定，删之前先确认不是它。
+
 ## 发布 0.2.0 的具体步骤
 
 ### 1. 取准备包
