@@ -43,12 +43,6 @@ def prepare(pkg, output, source_commit, version, platforms):
     for item in (ROOT / "miniapp/web").iterdir():
         if item.is_file():
             shutil.copyfile(item, output / item.name)
-    # Keep the user-visible version in the copied Web resources aligned with the
-    # signed package descriptor. The source defaults to the current stable
-    # preview, while corrective releases are selected by the Actions input.
-    for name in ("app.js", "index.html"):
-        path = output / name
-        path.write_text(path.read_text(encoding="utf-8").replace("0.2.0", version), encoding="utf-8")
     (output / "pkg").mkdir()
     for name in ["dandelion_web_adapter.js", "dandelion_web_adapter_bg.wasm"]:
         shutil.copyfile(pkg / name, output / "pkg" / name)
@@ -85,7 +79,10 @@ def prepare(pkg, output, source_commit, version, platforms):
         # descriptor and in BUILD-INFO.txt instead.
         "displayName": "Global Dandelion 离线工作台",
         "entrypoint": "index.html", "runtime": "web", "minHostApi": 1,
-        "offlineCore": True, "requestedCapabilities": [],
+        "offlineCore": True, "requestedCapabilities": [
+            "transfer", "scan", "state", "config", "platform", "hotspot",
+            "update", "diagnostics", "compat",
+        ],
         "networkPolicy": {"mode": "deny", "allowedOrigins": []}, "files": files,
     }
     (output / "manifest.unsigned.json").write_bytes(canonical(manifest))
@@ -142,7 +139,7 @@ def main():
     parser.add_argument("--resources", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--version", default="0.2.0")
+    parser.add_argument("--version", default="0.3.0")
     parser.add_argument("--platforms", default="desktop,ios,android")
     parser.add_argument("--inline-html", type=Path,
                         help="also write a single self-contained HTML for Android string injection")
