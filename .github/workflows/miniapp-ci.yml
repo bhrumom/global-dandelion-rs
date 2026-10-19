@@ -49,6 +49,11 @@ jobs:
           wasm-bindgen miniapp/wasm/target/wasm32-unknown-unknown/release/dandelion_web_adapter.wasm --target web --out-dir miniapp-generated
       - name: Prepare unsigned resources
         run: python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --output global-dandelion-UNSIGNED.zip
+      - name: Android single-document bundle
+        # Android injects one HTML string, so this variant must carry every module.
+        run: |
+          python3 miniapp/scripts/test_inline_html.py
+          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources-android --commit "$TESTED_COMMIT" --inline-html global-dandelion-0.2.0.html --output global-dandelion-UNSIGNED-android.zip
       - name: Install test-only tools
         run: |
           python3 -m pip install cryptography==46.0.3
@@ -66,6 +71,9 @@ jobs:
           path: |
             global-dandelion-UNSIGNED.zip
             global-dandelion-UNSIGNED.zip.sha256
+            global-dandelion-UNSIGNED-android.zip
+            global-dandelion-UNSIGNED-android.zip.sha256
+            global-dandelion-0.2.0.html
             miniapp-resources
             miniapp/wasm/Cargo.lock
             miniapp-ui*.png
