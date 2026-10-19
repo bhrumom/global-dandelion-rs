@@ -43,6 +43,12 @@ def prepare(pkg, output, source_commit, version, platforms):
     for item in (ROOT / "miniapp/web").iterdir():
         if item.is_file():
             shutil.copyfile(item, output / item.name)
+    # Keep the user-visible version in the copied Web resources aligned with the
+    # signed package descriptor. The source defaults to the current stable
+    # preview, while corrective releases are selected by the Actions input.
+    for name in ("app.js", "index.html"):
+        path = output / name
+        path.write_text(path.read_text(encoding="utf-8").replace("0.2.0", version), encoding="utf-8")
     (output / "pkg").mkdir()
     for name in ["dandelion_web_adapter.js", "dandelion_web_adapter_bg.wasm"]:
         shutil.copyfile(pkg / name, output / "pkg" / name)
