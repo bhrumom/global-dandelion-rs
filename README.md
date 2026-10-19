@@ -204,10 +204,13 @@ bounded local packet verification, cancel and report export need no network.
 Host capabilities are declared, not assumed. `miniapp/web/host-tools.js` publishes
 a `fabushi.miniapp.tools.v1` contract; panels for transfer, system metadata scan
 and hotspot control appear only when the host advertises that capability, and stay
-hidden otherwise rather than degrading into an implicit permission. The Desktop
-host bridges them through a preload `contextBridge`, iOS through its WebMCP host,
-Android through `FabushiWebMcpNative`. A host that offers nothing still gets the
-full offline workbench.
+hidden otherwise rather than degrading into an implicit permission. Discovery
+starts with a read-only `offline.capabilities` call that each host answers itself
+— iOS from its grants set, Android from the declared tool prefixes, Desktop from
+its runtime capabilities — so learning what is available never needs a tool
+approval. Desktop then bridges calls through a preload `contextBridge`, iOS and
+Android through the `__fabushiWebMcp` bridge they inject. A host that offers
+nothing still gets the full offline workbench.
 
 Package bytes are hosted on GitHub Releases while the release signature and the
 pinned trust root stay with the Fabushi Marketplace — see
