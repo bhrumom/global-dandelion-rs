@@ -1,15 +1,20 @@
-Global Dandelion — Proprietary License (LicenseRef-Proprietary)
+Global Dandelion
+Copyright (c) 2026 Global Dandelion rights holders
 
-Copyright (c) 2026 Global Dandelion rights holders. All rights reserved.
+This project is dual-licensed under either of
 
-This project's original source code and application assets are proprietary.
-No permission to copy, modify, redistribute, sublicense or sell them is granted
-except through an express authorization from the rights holder. Authorized
-distribution through Fabushi does not grant source redistribution rights.
+  * Apache License, Version 2.0 (see LICENSE-APACHE)
+  * MIT license (see LICENSE-MIT)
 
-Third-party components remain governed by their respective licenses. This notice
-does not replace or restrict those licenses. Distribution must preserve the
-applicable third-party notices and license texts.
+at your option.
 
-THE ORIGINAL SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW.
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this project by you, as defined in the Apache-2.0 license,
+shall be dual licensed as above, without any additional terms or conditions.
+
+Third-party components remain governed by their respective licenses. Distribution
+must preserve the applicable third-party notices and license texts.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.

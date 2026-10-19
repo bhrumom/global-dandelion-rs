@@ -1,58 +1,16 @@
 {
-  "status": "published",
-  "identity": {
-    "namespace": "bhrumom",
-    "name": "global-dandelion",
-    "kind": "web-miniapp"
-  },
+  "status": "draft",
+  "identity": { "namespace": "bhrumom", "name": "global-dandelion", "kind": "web-miniapp" },
   "displayName": "Global Dandelion 离线工作台",
   "description": "复用原生 Rust GDAN v2/BLAKE3 的离线文件分块与逐包完整性校验工作台。文件仅由用户选择，内容不上传。此 Desktop 预览不包含 LAN/WAN 传输、热点或系统扫描。",
-  "publisher": {
-    "id": "bhrumom",
-    "verified": false,
-    "verificationEvidence": []
-  },
+  "publisher": { "id": "bhrumom", "verified": false, "verificationEvidence": [] },
   "sourceUrl": "https://github.com/bhrumom/global-dandelion-rs",
-  "licenseSpdx": "LicenseRef-Proprietary",
-  "categories": [
-    "developer-tools",
-    "utilities"
-  ],
-  "tags": [
-    "offline",
-    "rust",
-    "wasm",
-    "file-integrity"
-  ],
-  "release": {
-    "version": "0.1.0",
-    "channel": "preview",
-    "platforms": [
-      "desktop"
-    ],
-    "minHostApi": 1,
-    "requestedCapabilities": []
-  },
+  "licenseSpdx": "MIT OR Apache-2.0",
+  "categories": ["developer-tools", "utilities"],
+  "tags": ["offline", "rust", "wasm", "file-integrity"],
+  "release": { "version": "0.1.0", "channel": "preview", "platforms": ["desktop"], "minHostApi": 1, "requestedCapabilities": [] },
   "offlineCore": true,
-  "networkPolicy": {
-    "mode": "deny",
-    "allowedOrigins": []
-  },
-  "publicationEligible": true,
-  "publishedRelease": {
-    "version": "0.1.0",
-    "channel": "preview",
-    "bundleDigest": "de10e02115415908f827723457817e51cb4f39aa5ca68798da824fecc483118a",
-    "sizeBytes": 453093,
-    "signerKeyId": "fabushi-marketplace-managed-20261013-1",
-    "trustEpoch": 1,
-    "sourceCommit": "fce746baecc6bbd9f4b12d5862d886cf7f72eda5",
-    "reviewRun": 38505804519,
-    "catalogEntry": "https://api.ombhrum.com/v1/extensions/web-miniapp/bhrumom/global-dandelion",
-    "installProof": "https://api.ombhrum.com/v1/extensions/install/web-miniapp/bhrumom/global-dandelion/0.1.0"
-  },
-  "remainingGates": [
-    "native-host-adaptation-for-lan-wan-hotspot-system-scan",
-    "later-desktop-source-installed-acceptance"
-  ]
+  "networkPolicy": { "mode": "deny", "allowedOrigins": [] },
+  "publicationEligible": false,
+  "publicationBlockers": ["catalog-authorized-production-signature", "publisher-binding-and-scan-review", "packaged-Fabushi-install-offline-isolation-lifecycle-acceptance"]
 }

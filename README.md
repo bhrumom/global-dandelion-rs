@@ -191,9 +191,9 @@ cutover measurements remain separate acceptance gates, never implied by a green 
 [development record](docs/development/2026-09-28-complete-migration.md),
 [operations](docs/operations.md), [benchmark methodology](docs/benchmarks.md).
 Python source pinned to `bhrum/global@aa7f3720c42856f0e1d18742f78fba156227ee79`,
-blob `54bf6226eb80d1ef6c4f6087fb02579141ab134f`. The owner selected proprietary
-distribution on 2026-10-13; see [LICENSE](LICENSE). Repository access does not
-grant source reuse rights. Cargo workspace publishing remains disabled.
+blob `54bf6226eb80d1ef6c4f6087fb02579141ab134f`. The project is dual-licensed
+under MIT or Apache-2.0; see [LICENSE](LICENSE). Cargo workspace publishing
+remains disabled.
 
 ## Fabushi offline mini app
 

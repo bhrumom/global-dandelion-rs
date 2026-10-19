@@ -77,3 +77,105 @@ try {
 }
 catch { q('status').textContent = '无法加载本地 Wasm：请检查完整安装及宿主 Wasm 策略。不会下载或运行原生程序。'; }
 controls();
+
+// --- Host capability layer -------------------------------------------------
+// The page never holds paths or credentials. It receives opaque handles from
+// the host after a user gesture and asks for declared tools only.
+import { connectHost, registerPageTools, formatBytes } from './host-tools.js';
+
+const host = await connectHost();
+const featureSections = [...document.querySelectorAll('[data-feature]')];
+for (const section of featureSections) section.hidden = !host.capabilities.has(section.dataset.feature);
+q('host-badge').textContent = host.available ? `宿主已连接 · ${host.platform}` : '仅离线能力';
+
+let transferSelection = null, transferOperation = null, transferTimer = null, scanRoot = null;
+const setStatus = (id, text) => { q(id).textContent = text; };
+const stopPolling = () => { if (transferTimer !== null) { clearInterval(transferTimer); transferTimer = null; } };
+
+if (host.capabilities.has('transfer')) {
+  const poolSelect = q('target-pool');
+  const announced = await host.call('offline.capabilities', {});
+  for (const pool of announced.ok && Array.isArray(announced.data?.targetPools) ? announced.data.targetPools : []) {
+    const option = document.createElement('option');
+    option.value = String(pool.id); option.textContent = String(pool.label ?? pool.id);
+    poolSelect.append(option);
+  }
+  q('pick-transfer').onclick = async () => {
+    const picked = await host.call('selection.pick', { mode: 'directory' });
+    if (!picked.ok) { setStatus('transfer-status', `无法选择目录：${picked.error.message}`); return; }
+    transferSelection = String(picked.data.selectionId);
+    const entries = Array.isArray(picked.data.entries) ? picked.data.entries : [];
+    const total = entries.reduce((sum, entry) => sum + Number(entry.size ?? 0), 0);
+    setStatus('transfer-status', `已选择目录 ${entries.map(entry => entry.name).join('、') || '—'} · ${formatBytes(total)}（句柄 ${transferSelection.slice(0, 8)}…）`);
+  };
+  q('send').onclick = async () => {
+    if (!transferSelection) { setStatus('transfer-status', '请先选择待发送文件。'); return; }
+    const sent = await host.call('transfer.send', { selectionId: transferSelection, targetPoolId: q('target-pool').value });
+    if (!sent.ok) { setStatus('transfer-status', `传输未启动：${sent.error.message}`); return; }
+    transferOperation = String(sent.data.operationId);
+    q('cancel-transfer').disabled = false; q('send').disabled = true;
+    setStatus('transfer-status', '传输已启动，正在等待宿主回报进度…');
+    stopPolling();
+    transferTimer = setInterval(async () => {
+      if (!transferOperation) { stopPolling(); return; }
+      const state = await host.call('transfer.status', { operationId: transferOperation });
+      if (!state.ok) { setStatus('transfer-status', `进度不可用：${state.error.message}`); stopPolling(); return; }
+      const phase = String(state.data?.state ?? 'unknown');
+      if (phase === 'running') return;
+      stopPolling();
+      setStatus('transfer-status', phase === 'complete'
+        ? '传输完成。'
+        : phase === 'cancelled' ? '传输已停止。' : `传输失败：${String(state.data?.error ?? '未知原因')}`);
+      q('cancel-transfer').disabled = true; q('send').disabled = false;
+      transferOperation = null;
+    }, 1500);
+  };
+  q('cancel-transfer').onclick = async () => {
+    if (!transferOperation) return;
+    const stopped = await host.call('transfer.cancel', { operationId: transferOperation });
+    stopPolling();
+    setStatus('transfer-status', stopped.ok ? '已请求停止传输。' : `停止失败：${stopped.error.message}`);
+    transferOperation = null; q('cancel-transfer').disabled = true; q('send').disabled = false;
+  };
+}
+
+if (host.capabilities.has('scan')) {
+  q('pick-root').onclick = async () => {
+    const picked = await host.call('selection.pick', { mode: 'directory' });
+    if (!picked.ok) { setStatus('scan-status', `无法选择根目录：${picked.error.message}`); return; }
+    scanRoot = String(picked.data.selectionId);
+    setStatus('scan-status', `已选择根目录（句柄 ${scanRoot.slice(0, 8)}…）。`);
+  };
+  const runScan = (tool) => async () => {
+    if (!scanRoot) { setStatus('scan-status', '请先选择根目录。'); return; }
+    setStatus('scan-status', '扫描中…');
+    const result = await host.call(tool, { rootId: scanRoot });
+    setStatus('scan-status', result.ok
+      ? `完成：${Number(result.data?.files ?? 0)} 个文件 · ${formatBytes(Number(result.data?.bytes ?? 0))}`
+      : `扫描失败：${result.error.message}`);
+  };
+  q('scan-metadata').onclick = runScan('scan.metadata');
+  q('scan-read').onclick = runScan('scan.read');
+}
+
+if (host.capabilities.has('hotspot')) {
+  q('hotspot-plan').onclick = async () => {
+    const planned = await host.call('hotspot.plan', {});
+    setStatus('hotspot-status', planned.ok ? `方案已生成：${String(planned.data?.profileId ?? '未命名')}` : `生成失败：${planned.error.message}`);
+  };
+  q('hotspot-apply').onclick = async () => {
+    const applied = await host.call('hotspot.apply', {});
+    setStatus('hotspot-status', applied.ok ? '热点已应用（仅本程序创建的临时配置）。' : `应用失败：${applied.error.message}`);
+  };
+  q('hotspot-stop').onclick = async () => {
+    const stopped = await host.call('hotspot.stop', {});
+    setStatus('hotspot-status', stopped.ok ? '热点已停止，配置已回滚。' : `停止失败：${stopped.error.message}`);
+  };
+}
+
+// Host-driven tools: read-only over page state, never a native capability.
+registerPageTools([{
+  name: 'offline.state.read',
+  description: '读取当前页面的本地校验状态与版本。',
+  run: () => ({ ready, running, selectedFiles: selected.length, packets: report?.packets ?? 0, verifiedBytes: report?.verifiedBytes ?? 0, appVersion: '0.2.0' }),
+}]);

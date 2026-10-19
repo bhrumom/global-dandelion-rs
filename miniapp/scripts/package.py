@@ -12,6 +12,18 @@ ROOT = Path(__file__).resolve().parents[2]
 DOMAIN = b"fabushi.fabapp.manifest.v1\0"
 MIME = {".html": "text/html", ".css": "text/css", ".js": "text/javascript",
         ".wasm": "application/wasm", ".txt": "text/plain"}
+# Android injects the bundle as an HTML string, so relative module specifiers
+# cannot resolve. Rewrite them to bare names served by an import map.
+INLINE_REWRITES = {
+    "./pkg/dandelion_web_adapter.js": "fabushi-adapter",
+    "./wasm-bytes.js": "fabushi-wasm-bytes",
+    "./host-tools.js": "fabushi-host-tools",
+}
+INLINE_CSP = (
+    "default-src 'none'; script-src 'unsafe-inline' data: 'wasm-unsafe-eval'; "
+    "style-src 'unsafe-inline'; img-src data:; connect-src 'none'; "
+    "object-src 'none'; base-uri 'none'; form-action 'none'"
+)
 
 
 def canonical(value):
@@ -20,9 +32,11 @@ def canonical(value):
                       separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
-def prepare(pkg, output, source_commit):
+def prepare(pkg, output, source_commit, version, platforms):
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("source commit must be an exact SHA")
+    if not platforms:
+        raise ValueError("at least one platform is required")
     if output.exists():
         raise ValueError("output already exists; never overwrite package preparation")
     output.mkdir(parents=True)
@@ -38,12 +52,15 @@ def prepare(pkg, output, source_commit):
         "export const wasmBytes = Uint8Array.from(atob('" + base64.b64encode(wasm).decode("ascii")
         + "'), c => c.charCodeAt(0));\n", encoding="utf-8")
     shutil.copyfile(ROOT / "LICENSE", output / "LICENSE.txt")
+    shutil.copyfile(ROOT / "LICENSE-MIT", output / "LICENSE-MIT.txt")
+    shutil.copyfile(ROOT / "LICENSE-APACHE", output / "LICENSE-APACHE.txt")
     shutil.copyfile(ROOT / "miniapp/wasm/dist/THIRD-PARTY-NOTICES.txt", output / "THIRD-PARTY-NOTICES.txt")
     shutil.copyfile(ROOT / "miniapp/wasm/Cargo.lock", output / "WebCargoLock.txt")
     (output / "BUILD-INFO.txt").write_text(
         f"source={source_commit}\nnative-base=aa6436315cde7b66868b0592d1c67b4590ebd1f9\n"
-        "kind=offline-web-preview\nlicense=LicenseRef-Proprietary\n"
-        "network-transfer=unavailable\n", encoding="utf-8")
+        f"kind=offline-web-preview\nlicense=MIT OR Apache-2.0\n"
+        f"version={version}\nplatforms={','.join(platforms)}\n"
+        "network-transfer=host-mediated\n", encoding="utf-8")
     files = {}
     for path in sorted(output.rglob("*")):
         if not path.is_file():
@@ -57,13 +74,40 @@ def prepare(pkg, output, source_commit):
     manifest = {
         "manifestVersion": 1, "packageClass": "catalog",
         "appId": "org.fabushi.global-dandelion", "publisherId": "bhrumom",
-        "version": "0.1.0", "displayName": "Global Dandelion 离线工作台",
+        "version": version, "platforms": platforms,
+        "displayName": "Global Dandelion 离线工作台",
         "entrypoint": "index.html", "runtime": "web", "minHostApi": 1,
         "offlineCore": True, "requestedCapabilities": [],
         "networkPolicy": {"mode": "deny", "allowedOrigins": []}, "files": files,
     }
     (output / "manifest.unsigned.json").write_bytes(canonical(manifest))
     return manifest
+
+
+def inline_html(resources, destination):
+    """Single self-contained HTML for hosts that inject a string (Android)."""
+    html = (resources / "index.html").read_text(encoding="utf-8")
+    css = (resources / "app.css").read_text(encoding="utf-8")
+    app = (resources / "app.js").read_text(encoding="utf-8")
+    for old, new in INLINE_REWRITES.items():
+        app = app.replace(f"'{old}'", f"'{new}'").replace(f'"{old}"', f'"{new}"')
+    modules = {
+        "fabushi-adapter": (resources / "pkg/dandelion_web_adapter.js").read_text(encoding="utf-8"),
+        "fabushi-wasm-bytes": (resources / "wasm-bytes.js").read_text(encoding="utf-8"),
+        "fabushi-host-tools": (resources / "host-tools.js").read_text(encoding="utf-8"),
+    }
+    imports = {name: "data:text/javascript;base64," + base64.b64encode(src.encode("utf-8")).decode("ascii")
+               for name, src in modules.items()}
+    html = html.replace('<link rel="stylesheet" href="app.css">', f"<style>{css}</style>")
+    html = html.replace('<script type="module" src="app.js"></script>',
+                        '<script type="importmap">' + json.dumps({"imports": imports}) + "</script>\n"
+                        '<script type="module">' + app + "</script>")
+    # The injected variant cannot use 'self': it has no origin of its own.
+    html = html.replace(
+        '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'self\' \'wasm-unsafe-eval\'; style-src \'self\'; connect-src \'none\'; img-src \'self\'; object-src \'none\'; base-uri \'none\'; form-action \'none\'">',
+        f'<meta http-equiv="Content-Security-Policy" content="{INLINE_CSP}">')
+    destination.write_text(html, encoding="utf-8")
+    return destination.stat().st_size
 
 
 def archive(resources, manifest, destination):
@@ -90,8 +134,15 @@ def main():
     parser.add_argument("--resources", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--version", default="0.2.0")
+    parser.add_argument("--platforms", default="desktop,ios,android")
+    parser.add_argument("--inline-html", type=Path,
+                        help="also write a single self-contained HTML for Android string injection")
     args = parser.parse_args()
-    manifest = prepare(args.pkg, args.resources, args.commit)
+    platforms = [item.strip() for item in args.platforms.split(",") if item.strip()]
+    manifest = prepare(args.pkg, args.resources, args.commit, args.version, platforms)
+    if args.inline_html is not None:
+        inline_html(args.resources, args.inline_html)
     archive(args.resources, manifest, args.output)
 
 
