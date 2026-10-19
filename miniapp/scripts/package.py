@@ -51,7 +51,6 @@ def prepare(pkg, output, source_commit, version, platforms):
     (output / "wasm-bytes.js").write_text(
         "export const wasmBytes = Uint8Array.from(atob('" + base64.b64encode(wasm).decode("ascii")
         + "'), c => c.charCodeAt(0));\n", encoding="utf-8")
-    shutil.copyfile(ROOT / "LICENSE", output / "LICENSE.txt")
     shutil.copyfile(ROOT / "LICENSE-MIT", output / "LICENSE-MIT.txt")
     shutil.copyfile(ROOT / "LICENSE-APACHE", output / "LICENSE-APACHE.txt")
     shutil.copyfile(ROOT / "miniapp/wasm/dist/THIRD-PARTY-NOTICES.txt", output / "THIRD-PARTY-NOTICES.txt")
