@@ -22,6 +22,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
+      - name: Host tool contract
+        # Pure page-side contract: every bridge shape the three hosts inject.
+        run: node --test miniapp/scripts/test_host_tools.mjs
       - name: Resolve separate Web adapter lockfile
         run: |
           if test -f miniapp/wasm/Cargo.lock; then

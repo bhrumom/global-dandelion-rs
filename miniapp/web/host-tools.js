@@ -4,10 +4,12 @@
 // credentials or shell access: it receives opaque handles issued by the host
 // after a user gesture, and every call is validated host-side.
 //
-// Bridge shapes:
-//   desktop  window.fabushi.invoke(tool, args)          -> Promise<result>
-//   android  window.FabushiWebMcpNative.callTool(json)  -> json string
-//   ios      no page -> host channel; page tools are host-invoked only
+// Bridge shapes, in preference order:
+//   ios/android  window.__fabushiWebMcp.call(name, input) -> Promise<result>
+//                (both native hosts inject this; iOS reports version 2, Android 1)
+//   android      window.FabushiWebMcpNative.callTool(name, json) -> json string
+//   desktop      window.fabushi.invoke(tool, args) -> Promise<{ok,data}>
+// A host that grants no tools simply reports none; the page stays offline-only.
 export const TOOL_CONTRACT = 'fabushi.miniapp.tools.v1';
 
 export const CAPABILITIES = Object.freeze({
@@ -41,7 +43,11 @@ const UNAVAILABLE = Object.freeze({
   available: false,
   platform: 'unknown',
   capabilities: new Set(),
-  call: async () => { throw new Error('HOST_TOOLS_UNAVAILABLE'); },
+  // Resolves rather than throws: a missing host is a normal state, not a fault.
+  call: async () => ({
+    ok: false,
+    error: { code: 'HOST_TOOLS_UNAVAILABLE', message: '当前宿主没有提供能力桥' },
+  }),
 });
 
 function normalise(result) {
@@ -51,24 +57,43 @@ function normalise(result) {
     catch { return { ok: false, error: { code: 'INVALID_RESULT', message: '宿主返回了非 JSON 结果' } }; }
   }
   if (typeof result !== 'object') return { ok: false, error: { code: 'INVALID_RESULT', message: '宿主返回了非对象结果' } };
-  if (result.ok === true) return result;
-  return { ok: false, error: result.error ?? { code: 'HOST_ERROR', message: '宿主拒绝了该操作' } };
+  if (result.ok === true) {
+    // Desktop answers {ok,data}; the injected mobile bridges answer {ok,result}.
+    return Object.hasOwn(result, 'data') ? result : { ...result, data: result.result };
+  }
+  const error = result.error;
+  if (typeof error === 'string' && error) return { ok: false, error: { code: 'HOST_ERROR', message: error } };
+  return { ok: false, error: error ?? { code: 'HOST_ERROR', message: '宿主拒绝了该操作' } };
 }
 
 function detectBridge() {
+  const injected = globalThis.__fabushiWebMcp;
+  if (injected && typeof injected.call === 'function') {
+    return {
+      platform: Number(injected.version) >= 2 ? 'ios' : 'android',
+      // Injected hosts resolve to the bare result and reject on failure, so a
+      // resolved value is success unless it explicitly carries an `ok` flag.
+      invoke: async (tool, args) => {
+        const value = await injected.call(tool, args ?? {});
+        return value && typeof value === 'object' && typeof value.ok === 'boolean'
+          ? value
+          : { ok: true, data: value };
+      },
+    };
+  }
   const desktop = globalThis.fabushi;
   if (desktop && typeof desktop.invoke === 'function') {
     return {
       platform: 'desktop',
-      invoke: (tool, args) => desktop.invoke(tool, args),
+      invoke: (tool, args) => desktop.invoke(tool, args ?? {}),
     };
   }
   const android = globalThis.FabushiWebMcpNative;
   if (android && typeof android.callTool === 'function') {
     return {
       platform: 'android',
-      // The Kotlin bridge is synchronous and takes a single JSON string.
-      invoke: async (tool, args) => android.callTool(JSON.stringify({ tool, arguments: args ?? {} })),
+      // The Kotlin @JavascriptInterface takes two positional arguments.
+      invoke: async (tool, args) => android.callTool(tool, JSON.stringify(args ?? {})),
     };
   }
   return null;
@@ -87,7 +112,12 @@ export async function connectHost() {
     }
     try { return normalise(await bridge.invoke(tool, args)); }
     catch (error) {
-      return { ok: false, error: { code: 'TRANSPORT_ERROR', message: String(error?.message ?? error) } };
+      const message = String(error?.message ?? error);
+      // Both mobile hosts reject ungranted tools with this exact prefix.
+      const code = /capability not granted/i.test(message) ? 'CAPABILITY_NOT_GRANTED'
+        : /Unknown WebMCP tool/i.test(message) ? 'TOOL_NOT_DECLARED'
+          : 'TRANSPORT_ERROR';
+      return { ok: false, error: { code, message } };
     }
   };
   const announced = await call('offline.capabilities', { contract: TOOL_CONTRACT });
@@ -109,6 +139,20 @@ export async function connectHost() {
  * Host-invoked tools stay read-only over page state; they never reach native.
  */
 export function registerPageTools(tools) {
+  const injected = globalThis.__fabushiWebMcp;
+  if (injected && typeof injected.registerLocalTool === 'function') {
+    for (const tool of tools) {
+      try {
+        injected.registerLocalTool({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: { type: 'object', properties: {} },
+          annotations: { readOnlyHint: true },
+        }, tool.run);
+      } catch { /* the host decides which page tools it accepts */ }
+    }
+    return 'injected';
+  }
   const modelContext = globalThis.document?.modelContext;
   if (modelContext && typeof modelContext.registerTool === 'function') {
     for (const tool of tools) {
