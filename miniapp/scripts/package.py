@@ -73,7 +73,10 @@ def prepare(pkg, output, source_commit, version, platforms):
     manifest = {
         "manifestVersion": 1, "packageClass": "catalog",
         "appId": "org.fabushi.global-dandelion", "publisherId": "bhrumom",
-        "version": version, "platforms": platforms,
+        "version": version,
+        # `platforms` is not part of fabapp v1: both the Marketplace signer and the
+        # host reject unknown manifest fields. Platform scope lives in the
+        # descriptor and in BUILD-INFO.txt instead.
         "displayName": "Global Dandelion 离线工作台",
         "entrypoint": "index.html", "runtime": "web", "minHostApi": 1,
         "offlineCore": True, "requestedCapabilities": [],
