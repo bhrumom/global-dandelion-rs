@@ -123,34 +123,54 @@ workflow 的最后一步自动完成，不需要额外配置：
 两种落点都只是"存字节"：签名载荷里的 `url` 指向哪，宿主就去哪取，取回后照样用
 `sha256` + `sizeBytes` 复核，不符即拒绝安装。信任根始终在 registry。
 
+同一步还会做完 registry 侧的三件事，否则包签好了也没人装得上：
+
+| 阶段 | 作用 | 幂等性 |
+|---|---|---|
+| `release-import` | 建目录记录（`pending_review`），descriptor 从 `source_commit` 那个提交取 | 同 descriptor 重复导入返回原记录；不同 descriptor 是冲突 |
+| `registry-binding` | 绑定 `(digest, sizeBytes, url)` | 同 artifactId 换 url 才改绑，换 digest 直接拒绝 |
+| `scan-record` | 记录扫描结论（审批门禁要求） | 结论不可改写 |
+
+descriptor 里的 `release.bundleDigest` 由脚本按实际字节填入，不读人工维护的字段——
+元数据永远不可能和包不一致。
+
 需要换落点时手动跑同一条命令：
 
 ```bash
 gh run download <delivery-run-id> -R bhrumom/fabushi-backend \
   -n global-dandelion-signed-delivery-<sha> -D signed-delivery
 
+DANDELION_SOURCE_COMMIT=<40 位 sha> \
 DANDELION_RELEASE_TOKEN=<pat> FABUSHI_MARKETPLACE_REVIEW_TOKEN=<token> \
   python3 fabushi-backend/.github/scripts/publish-github-release.py
 ```
 
-脚本做的事：建/复用 `v0.2.0` release → 确认 asset 大小与签名包一致（不一致绝不覆盖）→
-用 review token 把 `(digest, sizeBytes, url)` 登记到 registry。
+### 5. 审批（可选，默认不做）
 
-### 5. 审核并让签名载荷带上 url
-
-登记必须发生在 **release 审核通过之前**：url 是 artifact 记录的字段，而审核通过那一刻才
-生成带 url 的 release 签名。顺序反了就只能重发一个版本，因为已有签名不可改写。
+审批是**独立决策**，默认不执行：workflow 只把 release 推到 `pending_review`。
+要让宿主真的能装，得显式加 `-f approve=true` 重跑，或者单独调用审批路由：
 
 ```bash
-# 提交 + 扫描 + 审核（沿用现有 marketplace review 流程）
+gh workflow run global-dandelion-package-delivery.yml -R bhrumom/fabushi-backend \
+  -f version=0.2.0 -f approve=true \
+  -f preparation_release=dandelion-preparation-<sha8> \
+  -f source_commit=<40 位 sha> \
+  -f preparation_artifact_id=<artifact id> \
+  -f preparation_digest=<sha256>
 ```
 
-审核通过后，`GET /v1/extensions/install/{kind}/{ns}/{name}/{version}` 返回的签名载荷里
+审批必须在**登记之后**：url 是 artifact 记录的字段，而带 url 的 release 签名是在审批那一刻
+才生成的。顺序反了只能重发一个版本，因为已有签名不可改写。
+
+审批通过后，`GET /v1/extensions/install/{kind}/{ns}/{name}/{version}` 返回的签名载荷里
 `artifacts[0].url` 就是 GitHub 地址，宿主随后优先从那里取字节。
 
 ### 验证
 
 ```bash
-gh release view v0.2.0 -R bhrumom/global-dandelion-rs
+gh release view v0.2.0 -R bhrumom/fabushi-backend
 shasum -a 256 global-dandelion-0.2.0.fabapp   # 与 provenance.json 的 packageSha256 一致
+
+curl -s https://api.ombhrum.com/v1/extensions/install/web-miniapp/bhrumom/global-dandelion/0.2.0 \
+  | python3 -c 'import json,sys; p=json.load(sys.stdin); print(json.loads(p["releaseSignature"]["payload"])["artifacts"])'
 ```
