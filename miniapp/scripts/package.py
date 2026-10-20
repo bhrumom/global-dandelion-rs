@@ -140,7 +140,7 @@ def main():
     parser.add_argument("--resources", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--version", default="0.3.0")
+    parser.add_argument("--version", default="0.3.1")
     parser.add_argument("--platforms", default="desktop,ios,android")
     parser.add_argument("--inline-html", type=Path,
                         help="also write a single self-contained HTML for Android string injection")

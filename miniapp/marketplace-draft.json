@@ -8,7 +8,7 @@
   "licenseSpdx": "MIT OR Apache-2.0",
   "categories": ["developer-tools", "utilities"],
   "tags": ["offline", "rust", "wasm", "file-integrity", "cross-platform"],
-  "release": { "version": "0.3.0", "channel": "preview", "platforms": ["desktop", "ios", "android"], "minHostApi": 1, "requestedCapabilities": [] },
+  "release": { "version": "0.3.1", "channel": "preview", "platforms": ["desktop", "ios", "android"], "minHostApi": 1, "requestedCapabilities": [] },
   "runtime": {
     "owner": "host-plugins",
     "installMode": "fabapp",

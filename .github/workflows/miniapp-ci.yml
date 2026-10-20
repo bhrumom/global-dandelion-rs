@@ -53,7 +53,7 @@ jobs:
         # Android injects one HTML string, so this variant must carry every module.
         run: |
           python3 miniapp/scripts/test_inline_html.py
-          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources-android --commit "$TESTED_COMMIT" --inline-html global-dandelion-0.3.0.html --output global-dandelion-UNSIGNED-android.zip
+          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources-android --commit "$TESTED_COMMIT" --version 0.3.1 --inline-html global-dandelion-0.3.1.html --output global-dandelion-UNSIGNED-android.zip
       - name: Install test-only tools
         run: |
           python3 -m pip install cryptography==46.0.3
@@ -73,7 +73,7 @@ jobs:
             global-dandelion-UNSIGNED.zip.sha256
             global-dandelion-UNSIGNED-android.zip
             global-dandelion-UNSIGNED-android.zip.sha256
-            global-dandelion-0.3.0.html
+            global-dandelion-0.3.1.html
             miniapp-resources
             miniapp/wasm/Cargo.lock
             miniapp-ui*.png
