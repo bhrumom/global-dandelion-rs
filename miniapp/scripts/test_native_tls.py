@@ -127,12 +127,13 @@ authorized = true
         operation = receiver.call('transfer.receive', {'targetPoolId': 'configured', 'once': True})['operationId']
         for attempt in range(30):
             state = receiver.call('transfer.status', {'operationId': operation})
+            assert state['state'] == 'running', ('receiver failed before readiness', state)
             if state.get('ready'):
                 assert state['ready'] == {'address': address, 'mutual_tls': True}
                 break
             time.sleep(0.1)
         else:
-            raise AssertionError('native receiver never reported real readiness')
+            raise AssertionError(('native receiver never reported real readiness', state))
         selection = sender.call('selection.pick', {'mode': 'directory'})['selectionId']
         outgoing = sender.call('transfer.send', {'selectionId': selection, 'targetPoolId': 'configured'})['operationId']
         for worker, identifier in [(sender, outgoing), (receiver, operation)]:

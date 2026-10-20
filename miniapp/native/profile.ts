@@ -4,6 +4,7 @@ import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSy
 import { randomUUID } from "node:crypto";
 import { isAbsolute, join } from "node:path";
 import { isIP } from "node:net";
+import { networkInterfaces } from "node:os";
 import type { DandelionCliConfig } from "./miniapp-cli-backend.js";
 
 export function reserve(directory: string, planned: number) {
@@ -38,7 +39,9 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
   const validBind = (value: unknown): value is string => {
     if (typeof value !== "string" || value.length > 80) return false;
     const parsed = /^(?:\[([^\]]+)\]|([^:]+)):(\d{1,5})$/.exec(value);
-    return !!parsed && !!isIP(parsed[1] ?? parsed[2]!) && Number(parsed[3]) >= 1024 && Number(parsed[3]) <= 65535;
+    const ip = parsed?.[1] ?? parsed?.[2];
+    return !!parsed && !!ip && !!isIP(ip) && Number(parsed[3]) >= 1024 && Number(parsed[3]) <= 65535
+      && Object.values(networkInterfaces()).some(entries => entries?.some(entry => entry.address === ip));
   };
   let receiveBind = "127.0.0.1:20000";
   try {
@@ -68,7 +71,7 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
       const remote = settings.transport.mode === "tls";
       return { binaryPath, configPath, allowedRoots: [], authorizePickedRoots: true, stateDirectory,
         targetPools: [{ id: remote ? "configured" : "loopback", label: remote ? "已明确授权的 mTLS 目标" : "本机回环验证" }],
-        ...(remote ? { receive: { targetPoolId: "configured", caFile: tls.ca_file, certificateFile: tls.certificate_file, privateKeyFile: tls.private_key_file, bind: receiveBind, timeoutMs: 60000 } } : {}),
+        ...(remote ? { receive: { targetPoolId: "configured", caFile: tls.ca_file, certificateFile: tls.certificate_file, privateKeyFile: tls.private_key_file, bind: receiveBind, allowedClients: [...new Set(tls.peers.map(peer => peer.address.startsWith("[") ? peer.address.slice(1, peer.address.indexOf("]")) : peer.address.slice(0, peer.address.lastIndexOf(":"))))], timeoutMs: 60000 } } : {}),
       };
     },
     validBind,
