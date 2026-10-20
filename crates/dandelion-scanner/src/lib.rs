@@ -345,12 +345,18 @@ mod tests {
     async fn non_utf8_name_supported() {
         use std::os::unix::ffi::OsStringExt;
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path()
-                .join(std::ffi::OsString::from_vec(vec![0xff, b'a'])),
-            b"x",
-        )
-        .unwrap();
+        let path = dir.path().join(std::ffi::OsString::from_vec(vec![0xff, b'a']));
+        let created = std::fs::write(&path, b"x");
+        // APFS rejects invalid UTF-8 at file creation (EILSEQ), before the
+        // scanner runs. Still exercise the real scanner with a Unicode name.
+        #[cfg(target_vendor = "apple")]
+        let created = match created {
+            Err(error) if error.raw_os_error() == Some(92) => {
+                std::fs::write(dir.path().join("菩提-🪷"), b"x")
+            }
+            result => result,
+        };
+        created.unwrap();
         let (tx, mut rx) = mpsc::channel(1);
         let worker = start(
             LinuxSourceAccess,

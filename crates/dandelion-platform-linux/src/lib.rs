@@ -222,6 +222,21 @@ mod tests {
             .unwrap();
         assert_eq!(bytes, b"selected");
     }
+
+    #[test]
+    fn special_files_are_rejected_without_blocking_and_handle_stamps_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("fifo");
+        rustix::fs::mkfifoat(rustix::fs::CWD, &fifo, Mode::RUSR | Mode::WUSR).unwrap();
+        let root = SourceDirectory::open(dir.path()).unwrap();
+        assert!(root.open_regular(Path::new("fifo")).is_err());
+        let path = dir.path().join("data");
+        std::fs::write(&path, b"before").unwrap();
+        let file = root.open_file(Path::new("data")).unwrap();
+        let before = file.stamp().unwrap();
+        std::fs::write(&path, b"after-mutation").unwrap();
+        assert_ne!(before, file.stamp().unwrap());
+    }
 }
 
 pub mod inventory;
