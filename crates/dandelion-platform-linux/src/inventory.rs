@@ -146,7 +146,9 @@ pub fn mounts() -> Result<Vec<Mount>> {
 
 #[cfg(not(target_os = "linux"))]
 pub fn mounts() -> Result<Vec<Mount>> {
-    Err(Error::Platform("Linux mount generation inventory is unavailable on this OS".into()))
+    Err(Error::Platform(
+        "Linux mount generation inventory is unavailable on this OS".into(),
+    ))
 }
 
 /// Return the exact visible Linux mount identity covering a canonical source root.
@@ -336,7 +338,9 @@ pub fn observe() -> Result<Observation> {
 }
 #[cfg(not(target_os = "linux"))]
 pub fn observe() -> Result<Observation> {
-    Err(Error::Platform("Linux proc/sys inventory is unavailable on this OS".into()))
+    Err(Error::Platform(
+        "Linux proc/sys inventory is unavailable on this OS".into(),
+    ))
 }
 #[cfg(test)]
 mod tests {

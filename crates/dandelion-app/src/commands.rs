@@ -349,7 +349,9 @@ fn update(command: &crate::cli::UpdateCommand) -> Result<u8> {
 
 #[cfg(not(target_os = "linux"))]
 fn hotspot(_command: &crate::cli::HotspotCommand) -> Result<u8> {
-    Err(Error::Platform("NetworkManager hotspot requires Linux; no network state was changed".into()))
+    Err(Error::Platform(
+        "NetworkManager hotspot requires Linux; no network state was changed".into(),
+    ))
 }
 
 #[cfg(target_os = "linux")]
@@ -481,7 +483,10 @@ fn compat(command: &crate::cli::CompatCommand) -> Result<u8> {
 fn clock(cli: &Cli, peer: bool) -> Result<()> {
     if !peer {
         #[cfg(target_os = "linux")]
-        let uptime = Some(dandelion_platform_linux::inventory::bounded_text(std::path::Path::new("/proc/uptime"),256)?);
+        let uptime = Some(dandelion_platform_linux::inventory::bounded_text(
+            std::path::Path::new("/proc/uptime"),
+            256,
+        )?);
         #[cfg(not(target_os = "linux"))]
         let uptime: Option<String> = None;
         return output::json(

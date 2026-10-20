@@ -41,11 +41,19 @@ fn invalid_args_and_config_are_nonzero() {
 #[test]
 fn doctor_reports_compilation_target_and_local_clock_is_portable() {
     let doctor = cli(&["doctor", "--json"]);
-    assert!(doctor.status.success(), "{}", String::from_utf8_lossy(&doctor.stderr));
+    assert!(
+        doctor.status.success(),
+        "{}",
+        String::from_utf8_lossy(&doctor.stderr)
+    );
     let doctor: serde_json::Value = serde_json::from_slice(&doctor.stdout).unwrap();
     assert_eq!(doctor["target"], env!("DANDELION_BUILD_TARGET"));
     let clock = cli(&["platform", "time", "--json"]);
-    assert!(clock.status.success(), "{}", String::from_utf8_lossy(&clock.stderr));
+    assert!(
+        clock.status.success(),
+        "{}",
+        String::from_utf8_lossy(&clock.stderr)
+    );
     let clock: serde_json::Value = serde_json::from_slice(&clock.stdout).unwrap();
     assert_eq!(clock["system_clock_modified"], false);
     assert!(clock["unix_seconds"].as_u64().unwrap() > 0);
@@ -71,9 +79,18 @@ fn linux_only_commands_fail_before_mutation_on_apple() {
     config.state.directory = dir.path().join("state");
     let file = dir.path().join("config.toml");
     std::fs::write(&file, config.to_toml().unwrap()).unwrap();
-    let result = cli(&["--config", file.to_str().unwrap(), "run", "--resume", "--json"]);
+    let result = cli(&[
+        "--config",
+        file.to_str().unwrap(),
+        "run",
+        "--resume",
+        "--json",
+    ]);
     assert!(!result.status.success());
-    assert!(!config.state.directory.exists(), "failed resume must not reserve state");
+    assert!(
+        !config.state.directory.exists(),
+        "failed resume must not reserve state"
+    );
 }
 #[test]
 fn selftest_uses_real_pipeline_and_clean_json_stdout() {
@@ -111,14 +128,14 @@ fn closed_stdout_pipe_is_a_normal_cli_exit() {
 fn new_platform_and_scan_commands_have_real_behavior() {
     #[cfg(target_os = "linux")]
     {
-    let out = cli(&["platform", "inspect", "--json"]);
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let observation: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert!(!observation["mounts"].as_array().unwrap().is_empty());
+        let out = cli(&["platform", "inspect", "--json"]);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let observation: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert!(!observation["mounts"].as_array().unwrap().is_empty());
     }
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("data"), b"1234567").unwrap();

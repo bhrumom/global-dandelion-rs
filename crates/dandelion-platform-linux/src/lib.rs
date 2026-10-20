@@ -2,9 +2,9 @@
 //! components through held directory handles. No shell, elevation or unsafe Rust.
 use dandelion_core::filesystem::{FileStamp, SourceAccess, SourceFile, SourceRoot};
 use dandelion_core::{Error, Result};
-use rustix::fs::{Mode, OFlags};
 #[cfg(target_os = "linux")]
 use rustix::fs::ResolveFlags;
+use rustix::fs::{Mode, OFlags};
 use serde::Serialize;
 use std::{fs::File, path::Path};
 use std::{
@@ -105,7 +105,9 @@ impl SourceDirectory {
         while let Some(component) = components.next() {
             depth += 1;
             let Component::Normal(name) = component else {
-                return Err(Error::Scan("source path must contain only normal relative components".into()));
+                return Err(Error::Scan(
+                    "source path must contain only normal relative components".into(),
+                ));
             };
             if depth > 64 {
                 return Err(Error::Scan("source path exceeds depth limit".into()));
@@ -115,11 +117,15 @@ impl SourceDirectory {
             if !last {
                 flags |= OFlags::DIRECTORY;
             }
-            let file = File::from(rustix::fs::openat(&parent, name, flags, Mode::empty())
-                .map_err(std::io::Error::from)?);
+            let file = File::from(
+                rustix::fs::openat(&parent, name, flags, Mode::empty())
+                    .map_err(std::io::Error::from)?,
+            );
             let metadata = file.metadata()?;
             if metadata.dev() != device || (last && !metadata.is_file()) {
-                return Err(Error::Scan("source is not a regular file on the selected device".into()));
+                return Err(Error::Scan(
+                    "source is not a regular file on the selected device".into(),
+                ));
             }
             if last {
                 return Ok(file);
@@ -210,7 +216,10 @@ mod tests {
         std::fs::create_dir(selected.join("child")).unwrap();
         std::fs::write(selected.join("child/data"), b"replacement").unwrap();
         let mut bytes = Vec::new();
-        root.open_regular(Path::new("child/data")).unwrap().read_to_end(&mut bytes).unwrap();
+        root.open_regular(Path::new("child/data"))
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
         assert_eq!(bytes, b"selected");
     }
 }
