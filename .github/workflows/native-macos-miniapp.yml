@@ -1,0 +1,70 @@
+name: macOS install-owned native Mini App
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+env:
+  TESTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  native-package:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ env.TESTED_COMMIT }}
+      - name: Disk preflight
+        run: python3 scripts/disk_guard.py --path . --planned-bytes 8589934592
+      - name: Use the same pinned OpenSSL fixture provider as native Apple acceptance
+        run: echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+          targets: wasm32-unknown-unknown
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            miniapp/wasm -> target
+      - name: Build package-owned native engine and adapter
+        run: |
+          set -euo pipefail
+          cargo build --locked --release -p dandelion-app
+          mkdir native-built
+          cp target/release/dandelion native-built/dandelion.bin
+          npx --yes esbuild@0.25.12 miniapp/native/worker.ts --bundle --platform=node --target=node24 --format=cjs --outfile=native-built/worker.cjs
+          printf '[scanner]\nmax_files = 128\nmax_read_bytes = 1073741824\n[transport]\nmode = "loopback"\n[state]\nenabled = false\n' > native-built/default.toml
+          native-built/dandelion.bin --config native-built/default.toml self-test --json
+      - name: Exercise package-owned runtime and real Rust engine
+        run: |
+          node miniapp/scripts/test_native_worker.cjs native-built
+          python3 miniapp/scripts/test_native_tls.py native-built
+      - name: Build same-revision offline Wasm resources
+        run: |
+          cargo build --manifest-path miniapp/wasm/Cargo.toml --locked --release --target wasm32-unknown-unknown
+          cargo install wasm-bindgen-cli --version 0.2.129 --locked
+          wasm-bindgen miniapp/wasm/target/wasm32-unknown-unknown/release/dandelion_web_adapter.wasm --target web --out-dir miniapp-generated
+          (cd miniapp/wasm && mkdir -p dist && python3 ../../scripts/license_report.py)
+      - name: Prepare native-capability package
+        run: |
+          python3 scripts/disk_guard.py --path . --planned-bytes 67108864
+          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --version 0.4.0 --platforms desktop --native-dir native-built --output global-dandelion-UNSIGNED.zip
+          python3 -m venv "$RUNNER_TEMP/native-package-python"
+          "$RUNNER_TEMP/native-package-python/bin/pip" install cryptography==46.0.3
+          "$RUNNER_TEMP/native-package-python/bin/python" miniapp/scripts/test_package.py miniapp-resources
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-miniapp-preparation-${{ env.TESTED_COMMIT }}
+          path: |
+            global-dandelion-UNSIGNED.zip
+            global-dandelion-UNSIGNED.zip.sha256
+            miniapp-resources/manifest.unsigned.json
+            miniapp/wasm/Cargo.lock
+          if-no-files-found: error

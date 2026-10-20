@@ -1,14 +1,41 @@
 {
   "status": "draft",
-  "identity": { "namespace": "bhrumom", "name": "global-dandelion", "kind": "web-miniapp" },
-  "displayName": "Global Dandelion 文件与传输工作台",
-  "description": "复用原生 Rust GDAN v2/BLAKE3 的离线文件分块与逐包完整性校验工作台。离线校验不上传内容；原生传输仅由宿主在用户明确确认后发送到已授权目标。一套 Web 资源同时运行在 Desktop、iOS 与 Android 宿主；传输、系统扫描与热点面板只在宿主声明对应能力时出现，未声明时整块隐藏而不是降级为隐式权限。",
-  "publisher": { "id": "bhrumom", "verified": false, "verificationEvidence": [] },
+  "identity": {
+    "namespace": "bhrumom",
+    "name": "global-dandelion",
+    "kind": "web-miniapp"
+  },
+  "displayName": "Global Dandelion macOS 原生工作台",
+  "description": "macOS Apple Silicon 小程序：Rust 原生引擎、业务适配与离线 Web 工作台均随小程序安装，宿主只提供通用安装、权限、文件选择与进程接口。需明确允许原生代码运行。离线分块校验、目录扫描、本机回环及诊断使用实际 Rust 实现；外部传输、系统配置等能力只在完成相应授权和配置后提供。",
+  "publisher": {
+    "id": "bhrumom",
+    "verified": false,
+    "verificationEvidence": []
+  },
   "sourceUrl": "https://github.com/bhrumom/global-dandelion-rs",
   "licenseSpdx": "MIT OR Apache-2.0",
-  "categories": ["developer-tools", "utilities"],
-  "tags": ["offline", "rust", "wasm", "file-integrity", "cross-platform"],
-  "release": { "version": "0.3.4", "channel": "preview", "platforms": ["desktop", "ios", "android"], "minHostApi": 1, "requestedCapabilities": [] },
+  "categories": [
+    "developer-tools",
+    "utilities"
+  ],
+  "tags": [
+    "offline",
+    "rust",
+    "wasm",
+    "file-integrity",
+    "cross-platform"
+  ],
+  "release": {
+    "version": "0.4.0",
+    "channel": "preview",
+    "platforms": [
+      "desktop"
+    ],
+    "minHostApi": 2,
+    "requestedCapabilities": [
+      "native.runtime"
+    ]
+  },
   "runtime": {
     "owner": "host-plugins",
     "installMode": "fabapp",
@@ -16,10 +43,16 @@
     "publisherId": "bhrumom",
     "offlineCore": true,
     "license": "MIT OR Apache-2.0",
-    "networkPolicy": { "mode": "deny", "allowedOrigins": [] }
+    "networkPolicy": {
+      "mode": "deny",
+      "allowedOrigins": []
+    }
   },
   "offlineCore": true,
-  "networkPolicy": { "mode": "deny", "allowedOrigins": [] },
+  "networkPolicy": {
+    "mode": "deny",
+    "allowedOrigins": []
+  },
   "hosting": {
     "provider": "github-releases",
     "repository": "bhrumom/global-dandelion-rs",
@@ -27,5 +60,9 @@
     "signedBy": "fabushi-marketplace-managed-20261013-1"
   },
   "publicationEligible": false,
-  "publicationBlockers": ["catalog-authorized-production-signature", "publisher-binding-and-scan-review", "packaged-Fabushi-install-offline-isolation-lifecycle-acceptance"]
+  "publicationBlockers": [
+    "catalog-authorized-production-signature",
+    "publisher-binding-and-scan-review",
+    "packaged-Fabushi-install-offline-isolation-lifecycle-acceptance"
+  ]
 }
