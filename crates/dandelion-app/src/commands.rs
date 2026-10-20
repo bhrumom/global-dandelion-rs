@@ -84,7 +84,7 @@ pub fn execute(cli: &Cli) -> Result<u8> {
         }
         Command::Doctor => {
             output::json(
-                &serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"requires":"Linux 5.6+ openat2, no root","disk":dandelion_platform_linux::disk_space(&std::env::current_dir()?)?,"network":"no diagnostics traffic sent"}),
+                &serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"target":env!("DANDELION_BUILD_TARGET"),"source_access":if cfg!(target_os = "linux") {"Linux 5.6+ openat2"} else {"Apple held-directory openat/NOFOLLOW"},"disk":dandelion_platform_linux::disk_space(&std::env::current_dir()?)?,"network":"no diagnostics traffic sent"}),
             )?;
             Ok(0)
         }
@@ -306,13 +306,13 @@ fn update(command: &crate::cli::UpdateCommand) -> Result<u8> {
         _ => return Err(Error::Config("choose one detached signature source".into())),
     };
     let key = dandelion_updater::read_small(&trust.public_key, 32)?;
-    let target = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
+    let target = env!("DANDELION_BUILD_TARGET");
     let verified = dandelion_updater::verify(
         &raw,
         &signature,
         &key,
         env!("CARGO_PKG_VERSION"),
-        &target,
+        target,
         dandelion_updater::now()?,
         trust.allow_rollback,
     )?;
@@ -347,6 +347,12 @@ fn update(command: &crate::cli::UpdateCommand) -> Result<u8> {
     Ok(0)
 }
 
+#[cfg(not(target_os = "linux"))]
+fn hotspot(_command: &crate::cli::HotspotCommand) -> Result<u8> {
+    Err(Error::Platform("NetworkManager hotspot requires Linux; no network state was changed".into()))
+}
+
+#[cfg(target_os = "linux")]
 fn hotspot(command: &crate::cli::HotspotCommand) -> Result<u8> {
     use crate::cli::HotspotCommand;
     let convert = |s: &crate::cli::HotspotSettings| dandelion_hotspot::Settings {
@@ -474,8 +480,12 @@ fn compat(command: &crate::cli::CompatCommand) -> Result<u8> {
 
 fn clock(cli: &Cli, peer: bool) -> Result<()> {
     if !peer {
+        #[cfg(target_os = "linux")]
+        let uptime = Some(dandelion_platform_linux::inventory::bounded_text(std::path::Path::new("/proc/uptime"),256)?);
+        #[cfg(not(target_os = "linux"))]
+        let uptime: Option<String> = None;
         return output::json(
-            &serde_json::json!({"unix_seconds":dandelion_updater::now()?,"uptime":dandelion_platform_linux::inventory::bounded_text(std::path::Path::new("/proc/uptime"),256)?,"system_clock_modified":false,"external_reference":false}),
+            &serde_json::json!({"unix_seconds":dandelion_updater::now()?,"uptime":uptime,"system_clock_modified":false,"external_reference":false}),
         );
     }
     use dandelion_transport::Transport;

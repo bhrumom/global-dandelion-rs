@@ -20,9 +20,11 @@
       "evidence": [
         "crates/dandelion-app/src/commands.rs",
         "crates/dandelion-transport/src/tls.rs",
-        "scripts/tls_acceptance.py"
+        "scripts/tls_acceptance.py",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "host-clock-mutation",
@@ -243,9 +245,11 @@
       "evidence": [
         "crates/dandelion-scanner/src/lib.rs",
         "crates/dandelion-transport/src/lib.rs",
-        "crates/dandelion-app/tests/cli.rs"
+        "crates/dandelion-app/tests/cli.rs",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "metadata-scan",
@@ -262,9 +266,11 @@
       "reason": "Streaming metadata inventory without payload opens; finite bounds and cancellation.",
       "evidence": [
         "crates/dandelion-scanner/src/lib.rs",
-        "crates/dandelion-app/tests/cli.rs"
+        "crates/dandelion-app/tests/cli.rs",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "hotspot",
@@ -302,9 +308,11 @@
       "reason": "Semantic versions, stable-channel/downgrade/architecture/expiry validation.",
       "evidence": [
         "crates/dandelion-updater/src/lib.rs",
-        "scripts/update_acceptance.py"
+        "scripts/update_acceptance.py",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "updater",
@@ -322,9 +330,11 @@
       "evidence": [
         "crates/dandelion-updater/src/lib.rs",
         "scripts/update_acceptance.py",
-        "packaging/systemd/dandelion-update-check.timer"
+        "packaging/systemd/dandelion-update-check.timer",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "production-trust-required"
+      "verification_scope": "production-trust-required",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "rename-effect",
@@ -363,9 +373,11 @@
       "evidence": [
         "crates/dandelion-transport/src/lib.rs",
         "crates/dandelion-app/src/supervisor.rs",
-        "scripts/acceptance.py"
+        "scripts/acceptance.py",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "loopback-receive",
@@ -382,9 +394,11 @@
       "reason": "Decode/checksum/exact-byte verification replaces blind discard.",
       "evidence": [
         "crates/dandelion-transport/src/lib.rs",
-        "crates/dandelion-app/tests/cli.rs"
+        "crates/dandelion-app/tests/cli.rs",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "private-vps",
@@ -402,9 +416,11 @@
       "evidence": [
         "crates/dandelion-transport/src/tls.rs",
         "crates/dandelion-core/src/targets.rs",
-        "scripts/tls_acceptance.py"
+        "scripts/tls_acceptance.py",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "lan",
@@ -422,9 +438,11 @@
       "evidence": [
         "crates/dandelion-transport/src/tls.rs",
         "crates/dandelion-core/src/targets.rs",
-        "scripts/tls_acceptance.py"
+        "scripts/tls_acceptance.py",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "startup-drive-scan",
@@ -482,9 +500,11 @@
       "evidence": [
         "crates/dandelion-scanner/src/lib.rs",
         "crates/dandelion-platform-linux/src/lib.rs",
-        "crates/dandelion-app/src/supervisor.rs"
+        "crates/dandelion-app/src/supervisor.rs",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "chunk-framing",
@@ -521,9 +541,11 @@
       "evidence": [
         "crates/dandelion-transport/src/tls.rs",
         "crates/dandelion-core/src/targets.rs",
-        "scripts/tls_acceptance.py"
+        "scripts/tls_acceptance.py",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "worker-explosion",
@@ -561,9 +583,11 @@
       "evidence": [
         "crates/dandelion-app/src/supervisor.rs",
         "crates/dandelion-app/src/main.rs",
-        "scripts/acceptance.py"
+        "scripts/acceptance.py",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "state",
@@ -584,9 +608,11 @@
         "crates/dandelion-app/tests/cli.rs",
         "docs/adr/0007-bounded-file-resume.md",
         "crates/dandelion-app/src/execution.rs",
-        "crates/dandelion-platform-linux/src/inventory.rs"
+        "crates/dandelion-platform-linux/src/inventory.rs",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     },
     {
       "id": "country-metadata",
@@ -743,9 +769,11 @@
       "evidence": [
         "crates/dandelion-app/src/main.rs",
         "crates/dandelion-app/src/supervisor.rs",
-        "crates/dandelion-app/tests/cli.rs"
+        "crates/dandelion-app/tests/cli.rs",
+        "docs/specs/native-apple-core.md"
       ],
-      "verification_scope": "current-ci"
+      "verification_scope": "current-ci",
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
     }
   ],
   "acceptance_gate_manifest": "docs/acceptance-gates.json"

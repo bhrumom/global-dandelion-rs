@@ -1,0 +1,72 @@
+name: Native Apple core
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: apple-core-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_BUILD_JOBS: '2'
+  CARGO_INCREMENTAL: '0'
+  TESTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TESTED_COMMIT }}
+          persist-credentials: false
+      - name: Exact source and storage preflight
+        run: |
+          test "$(git rev-parse HEAD)" = "$TESTED_COMMIT"
+          python3 scripts/disk_guard.py --planned-bytes 6442450944
+      - name: Pinned toolchain and OpenSSL fixture provider
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          key: native-apple-${{ matrix.target }}
+      - name: Architecture and formatting
+        run: |
+          cargo fmt --all -- --check
+          python3 scripts/check_architecture.py
+          python3 scripts/check_parity.py
+      - name: Native lint and test suite
+        run: |
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo test --locked --workspace --all-features
+      - name: Real engine and authenticated fixtures
+        run: |
+          cargo build --locked --release -p dandelion-app
+          mkdir -p dist
+          target/release/dandelion self-test --json > dist/self-test.json
+          python3 scripts/tls_acceptance.py --binary target/release/dandelion > dist/tls-acceptance.json
+          python3 scripts/update_acceptance.py --binary target/release/dandelion > dist/update-acceptance.json
+      - name: Package exact native binary
+        run: |
+          python3 scripts/disk_guard.py --planned-bytes 134217728
+          cp target/release/dandelion dist/
+          { printf 'git_sha=%s\n' "$TESTED_COMMIT"; rustc -Vv; cargo -V; } > dist/BUILD-INFO.txt
+          (cd dist && shasum -a 256 dandelion BUILD-INFO.txt self-test.json tls-acceptance.json update-acceptance.json > SHA256SUMS)
+          tar -czf dandelion-${{ matrix.target }}.tar.gz -C dist .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: dandelion-${{ matrix.target }}-${{ env.TESTED_COMMIT }}
+          path: |
+            dandelion-${{ matrix.target }}.tar.gz
+            dist/*acceptance.json
+          if-no-files-found: warn

@@ -37,6 +37,44 @@ fn invalid_args_and_config_are_nonzero() {
     assert_eq!(cli(&["run", "--unknown"]).status.code(), Some(2));
     assert_eq!(cli(&["run"]).status.code(), Some(2));
 }
+
+#[test]
+fn doctor_reports_compilation_target_and_local_clock_is_portable() {
+    let doctor = cli(&["doctor", "--json"]);
+    assert!(doctor.status.success(), "{}", String::from_utf8_lossy(&doctor.stderr));
+    let doctor: serde_json::Value = serde_json::from_slice(&doctor.stdout).unwrap();
+    assert_eq!(doctor["target"], env!("DANDELION_BUILD_TARGET"));
+    let clock = cli(&["platform", "time", "--json"]);
+    assert!(clock.status.success(), "{}", String::from_utf8_lossy(&clock.stderr));
+    let clock: serde_json::Value = serde_json::from_slice(&clock.stdout).unwrap();
+    assert_eq!(clock["system_clock_modified"], false);
+    assert!(clock["unix_seconds"].as_u64().unwrap() > 0);
+}
+
+#[test]
+#[cfg(target_vendor = "apple")]
+fn linux_only_commands_fail_before_mutation_on_apple() {
+    for command in ["inspect", "mounts", "watch"] {
+        let result = cli(&["platform", command, "--json"]);
+        assert!(!result.status.success());
+        assert!(result.stdout.is_empty());
+    }
+    let result = cli(&["hotspot", "plan", "--interface", "wlan0"]);
+    assert!(!result.status.success());
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("data");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("a"), b"abc").unwrap();
+    let mut config = dandelion_config::Config::default();
+    config.scanner.roots = vec![source];
+    config.state.enabled = true;
+    config.state.directory = dir.path().join("state");
+    let file = dir.path().join("config.toml");
+    std::fs::write(&file, config.to_toml().unwrap()).unwrap();
+    let result = cli(&["--config", file.to_str().unwrap(), "run", "--resume", "--json"]);
+    assert!(!result.status.success());
+    assert!(!config.state.directory.exists(), "failed resume must not reserve state");
+}
 #[test]
 fn selftest_uses_real_pipeline_and_clean_json_stdout() {
     let out = cli(&["self-test", "--json", "--log-format", "json"]);
@@ -71,6 +109,8 @@ fn closed_stdout_pipe_is_a_normal_cli_exit() {
 
 #[test]
 fn new_platform_and_scan_commands_have_real_behavior() {
+    #[cfg(target_os = "linux")]
+    {
     let out = cli(&["platform", "inspect", "--json"]);
     assert!(
         out.status.success(),
@@ -79,6 +119,7 @@ fn new_platform_and_scan_commands_have_real_behavior() {
     );
     let observation: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(!observation["mounts"].as_array().unwrap().is_empty());
+    }
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("data"), b"1234567").unwrap();
     let root = dir.path().to_str().unwrap();
@@ -186,6 +227,7 @@ fn legacy_import_and_invalid_input_preservation() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn hotspot_plan_is_read_only_and_apply_requires_explicit_consent() {
     let plan = cli(&[
         "hotspot",
@@ -220,6 +262,7 @@ fn hotspot_plan_is_read_only_and_apply_requires_explicit_consent() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn file_level_resume_skips_only_unchanged_acknowledged_files() {
     let dir = tempfile::tempdir().unwrap();
     let source = dir.path().join("data");
