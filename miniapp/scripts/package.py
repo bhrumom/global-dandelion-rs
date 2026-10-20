@@ -71,6 +71,8 @@ def prepare(pkg, output, source_commit, version, platforms, native_dir=None):
         if platforms != ['desktop'] or version != '0.4.0':
             raise ValueError('native package requires reviewed Mac-only 0.4.0 release')
         (output / 'native').mkdir()
+        info = output / 'BUILD-INFO.txt'
+        info.write_text(info.read_text().replace('kind=offline-web-preview', 'kind=install-owned-native-macos'), encoding='utf-8')
         for name in ['worker.cjs', 'dandelion.bin', 'default.toml']:
             shutil.copyfile(native_dir / name, output / 'native' / name)
         binary = (output / 'native/dandelion.bin').read_bytes()

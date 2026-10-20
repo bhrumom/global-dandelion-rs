@@ -1,6 +1,10 @@
 # Global Dandelion in Fabushi — offline package specification
 
 Status: active; release acceptance pending. Date: 2026-10-19.
+The 2026-10-20 user correction and `macos-installed-native-miniapp.md` supersede
+the empty-native-capability/Host-owned adaptation clauses below for macOS 0.4.0.
+Native implementation must arrive with the installed Mini App; legacy offline
+versions retain the original deny/empty-capability rules.
 Baseline: PR #1 at aa6436315cde7b66868b0592d1c67b4590ebd1f9,
 native architecture Spec 2.1. Parent: Fabushi OMA-001/FPM-001 at
 371b72f1cd20de03dc4dff9a15ed761054968093.

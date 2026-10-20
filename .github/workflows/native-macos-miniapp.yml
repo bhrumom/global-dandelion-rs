@@ -60,6 +60,6 @@ jobs:
           path: |
             global-dandelion-UNSIGNED.zip
             global-dandelion-UNSIGNED.zip.sha256
-            miniapp-resources
+            miniapp-resources/manifest.unsigned.json
             miniapp/wasm/Cargo.lock
           if-no-files-found: error
