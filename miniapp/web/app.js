@@ -111,12 +111,14 @@ if (host.capabilities.has('transfer')) {
   q('send').onclick = async () => {
     if (!transferSelection) { setStatus('transfer-status', '请先选择待发送文件。'); return; }
     const repeat = Math.max(1, Math.min(10000, Number(q('transfer-repeat').value || 1)));
+    const watch = q('transfer-watch').checked;
+    const resume = q('transfer-resume').checked;
     const sent = await host.call('transfer.send', {
       selectionId: transferSelection,
       targetPoolId: q('target-pool').value,
-      repeat,
-      watch: q('transfer-watch').checked,
-      resume: q('transfer-resume').checked,
+      ...(watch || resume ? {} : { repeat }),
+      watch,
+      resume,
     });
     if (!sent.ok) { setStatus('transfer-status', `传输未启动：${sent.error.message}`); return; }
     transferOperation = String(sent.data.operationId);
