@@ -92,6 +92,11 @@ pub enum Command {
 pub enum ConfigCommand {
     Init,
     Check,
+    /// Normalize an explicitly imported Mini App configuration into private state.
+    Isolate {
+        #[arg(long, value_name = "DIR")]
+        state_directory: PathBuf,
+    },
 }
 #[derive(Debug, clap::Args)]
 pub struct Run {

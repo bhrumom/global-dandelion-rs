@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { createDandelionCliBackend } from "./miniapp-cli-backend.js";
 import { createMiniAppToolRouter, type MiniAppToolScope } from "./miniapp-tools.js";
+import { createProfile, publicResult } from "./profile.js";
+import { macObservation } from "./macos.js";
 
 function main() {
   const context = new AsyncLocalStorage<string>();
@@ -22,20 +24,46 @@ function main() {
     hostCalls.set(callId, { resolve, reject, timer });
     output({ kind: "host", id, callId, method, ...args });
   });
-  const backend = createDandelionCliBackend({
-    binaryPath: join(__dirname, "dandelion.bin"),
-    configPath: join(__dirname, "default.toml"),
-    allowedRoots: [], authorizePickedRoots: true,
-    targetPools: [{ id: "loopback", label: "本机回环验证" }],
-  }, {
+  const dataDirectory = process.env.FABUSHI_NATIVE_DATA_DIRECTORY;
+  if (!dataDirectory) throw new Error("PRIVATE_DATA_DIRECTORY_REQUIRED");
+  const profile = createProfile(join(__dirname, "dandelion.bin"), join(__dirname, "default.toml"), dataDirectory);
+  const ports = {
     pick: async mode => {
       const result = await host("file-picker", { mode });
       if (result === null) return null;
       if (!Array.isArray(result) || result.length > 1 || result.some(p => !p || typeof p.path !== "string" || typeof p.name !== "string" || typeof p.size !== "number")) throw new Error("INVALID_PICKER_RESULT");
       return result;
     },
-  });
-  const router = createMiniAppToolRouter({ backend, allowedAppId: "org.fabushi.global-dandelion", approve: async tool => await host("confirmation", { detail: tool }) === true });
+  } satisfies Parameters<typeof createDandelionCliBackend>[1];
+  let backend = createDandelionCliBackend(profile.options(), ports);
+  const makeRouter = () => createMiniAppToolRouter({ backend, allowedAppId: "org.fabushi.global-dandelion", approve: async tool => await host("confirmation", { detail: tool }) === true });
+  let router = makeRouter();
+  const invokePackage = async (scope: MiniAppToolScope, method: unknown, args: unknown) => {
+    const denied = { ok: false, error: { code: "PACKAGE_TOOL_FAILED", message: "操作未完成，请检查本机配置或重新授权。" } };
+    if (scope.appId !== "org.fabushi.global-dandelion") return denied;
+    if (method === "config.import") {
+      let candidate: ReturnType<typeof profile.prepareImport> | undefined;
+      try {
+        const picked = await host("file-picker", { mode: "files" }) as { path: string }[] | null;
+        if (!picked?.length) return denied;
+        candidate = profile.prepareImport(picked[0]!.path);
+        if (!await host("confirmation", { detail: "导入配置并授权其中的证书和目标：" + candidate.summary.slice(0, 180) })) return denied;
+        candidate.commit(); backend.cancelAll?.();
+        backend = createDandelionCliBackend(profile.options(), ports); router = makeRouter();
+        return { ok: true, data: { imported: true, privateState: true, automaticSourcesRemoved: true } };
+      } catch { return denied; } finally { candidate?.discard(); }
+    }
+    if (typeof method === "string" && /^platform\.(inspect|mounts|time|watch)$/.test(method)) {
+      try { return { ok: true, data: await macObservation(method.split(".")[1]!) }; } catch { return denied; }
+    }
+    if (method === "config.check" && profile.error()) return { ok: false, error: { code: "CONFIG_INVALID", message: profile.error()! } };
+    const result = await router.invoke(scope, method, args);
+    if (method === "offline.capabilities" && result.ok && result.data && typeof result.data === "object") {
+      const data = result.data as { capabilities: string[] };
+      if (process.platform === "darwin" && !data.capabilities.includes("platform")) data.capabilities.push("platform");
+    }
+    return publicResult(result);
+  };
   const shutdown = () => {
     backend.cancelAll?.();
     for (const call of hostCalls.values()) { clearTimeout(call.timer); call.reject(new Error("RUNTIME_CLOSED")); }
@@ -56,7 +84,7 @@ function main() {
     active++;
     try {
       await context.run(message.id, async () => {
-        const result = await router.invoke(message.scope as MiniAppToolScope, message.method, message.args);
+        const result = await invokePackage(message.scope as MiniAppToolScope, message.method, message.args);
         output({ kind: "result", id: message.id, result });
       });
     } finally { active--; }

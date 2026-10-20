@@ -82,6 +82,23 @@ pub fn execute(cli: &Cli) -> Result<u8> {
             print_config(load(cli, Overrides::default())?.get(), cli.json)?;
             Ok(0)
         }
+        Command::Config {
+            command: ConfigCommand::Isolate { state_directory },
+        } => {
+            if !state_directory.is_absolute() || state_directory.parent().is_none() {
+                return Err(Error::Config(
+                    "private state directory must be absolute".into(),
+                ));
+            }
+            let mut config = load(cli, Overrides::default())?.get().clone();
+            config.scanner.roots.clear();
+            config.scanner.allowed_mount_prefixes.clear();
+            config.scanner.max_files = config.scanner.max_files.min(128);
+            config.scanner.max_read_bytes = config.scanner.max_read_bytes.min(1024 * 1024 * 1024);
+            config.state.directory = state_directory.clone();
+            print_config(config.validate()?.get(), cli.json)?;
+            Ok(0)
+        }
         Command::Doctor => {
             output::json(
                 &serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"target":env!("DANDELION_BUILD_TARGET"),"native_contract":if cfg!(target_vendor = "apple") {"dandelion.native.apple.v1"} else {"dandelion.native.linux.v1"},"source_access":if cfg!(target_os = "linux") {"Linux 5.6+ openat2"} else {"Apple held-directory openat/NOFOLLOW"},"disk":dandelion_platform_linux::disk_space(&std::env::current_dir()?)?,"network":"no diagnostics traffic sent"}),

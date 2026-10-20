@@ -42,6 +42,7 @@ export const TOOLS = Object.freeze({
   'state.import': { capability: CAPABILITIES.STATE, mutating: true },
   'config.defaults': { capability: CAPABILITIES.CONFIG, mutating: false },
   'config.check': { capability: CAPABILITIES.CONFIG, mutating: false },
+  'config.import': { capability: CAPABILITIES.CONFIG, mutating: true },
   'platform.inspect': { capability: CAPABILITIES.PLATFORM, mutating: false },
   'platform.mounts': { capability: CAPABILITIES.PLATFORM, mutating: false },
   'platform.time': { capability: CAPABILITIES.PLATFORM, mutating: false },

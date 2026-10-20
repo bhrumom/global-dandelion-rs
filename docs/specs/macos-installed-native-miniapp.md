@@ -29,6 +29,16 @@ App. Current priority is macOS. This supersedes Host-bundled engine composition.
 - GD-MAC06: preserve truthful native/platform capability detection. macOS
   inventory, external transfer onboarding and other remaining native parity
   work need real implementation/evidence before complete-Mac claims.
+- GD-MAC07: package-owned configuration import uses the native picker and a
+  separate explicit approval for configured peers/certificate paths. Copy only
+  a bounded regular file through a held no-follow handle. Normalize it in Rust:
+  clear automatic source/mount roots and force state into the Host-provided
+  account/app private directory. Atomically persist the validated private config;
+  invalid imports retain last-good config. No credentials/absolute paths cross
+  the Web boundary. State/receiver and peer capabilities follow actual config.
+- GD-MAC08: native macOS observation uses bounded fixed-path OS commands and Node
+  OS APIs inside the installed package. Expose read-only inventory/time/mount
+  observations and bounded watch; observations never authorize a source/target.
 
 ## Packaging, failure and acceptance
 

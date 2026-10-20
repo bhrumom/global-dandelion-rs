@@ -177,6 +177,16 @@ for (const button of document.querySelectorAll('[data-native-tool]')) {
     setStatus('advanced-status', `${tool} 执行中…`);
     const args = tool === 'compat.countryLookup' ? { address: q('country-address').value.trim() } : {};
     const result = await host.call(tool, args);
+    if (tool === 'config.import' && result.ok) {
+      transferSelection = null; scanRoot = null;
+      const refreshed = await host.call('offline.capabilities', {});
+      if (refreshed.ok && Array.isArray(refreshed.data?.targetPools)) {
+        const select = q('target-pool'); select.replaceChildren();
+        for (const pool of refreshed.data.targetPools) {
+          const option = document.createElement('option'); option.value = String(pool.id); option.textContent = String(pool.label); select.append(option);
+        }
+      }
+    }
     setStatus('advanced-status', result.ok
       ? `${tool} 完成：${JSON.stringify(result.data ?? {}).slice(0, 600)}`
       : `${tool} 失败：${result.error.message}`);
