@@ -140,7 +140,7 @@ if (host.capabilities.has('transfer')) {
     }, 1500);
   };
   q('receive').onclick = async () => {
-    const received = await host.call('transfer.receive', { targetPoolId: q('target-pool').value, once: true });
+    const received = await host.call('transfer.receive', { targetPoolId: q('target-pool').value, once: q('receive-once').checked });
     setStatus('transfer-status', received.ok ? `接收已启动（${String(received.data?.operationId ?? '—').slice(0, 8)}…）。` : `接收未启动：${received.error.message}`);
   };
   q('cancel-transfer').onclick = async () => {
