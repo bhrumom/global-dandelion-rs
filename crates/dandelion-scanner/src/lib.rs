@@ -345,7 +345,9 @@ mod tests {
     async fn non_utf8_name_supported() {
         use std::os::unix::ffi::OsStringExt;
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(std::ffi::OsString::from_vec(vec![0xff, b'a']));
+        let path = dir
+            .path()
+            .join(std::ffi::OsString::from_vec(vec![0xff, b'a']));
         let created = std::fs::write(&path, b"x");
         // APFS rejects invalid UTF-8 at file creation (EILSEQ), before the
         // scanner runs. Still exercise the real scanner with a Unicode name.
