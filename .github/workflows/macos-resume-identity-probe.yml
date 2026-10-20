@@ -9,8 +9,6 @@ jobs:
   native-mount-probe:
     runs-on: macos-15
     timeout-minutes: 10
-    env:
-      PROBE_REPORT: ${{ runner.temp }}/dandelion-resume-probe/report.json
     steps:
       - uses: actions/checkout@v6
         with:
@@ -18,10 +16,12 @@ jobs:
       - name: Reserve disk before the task-owned image and compiler outputs
         run: python3 scripts/disk_guard.py --path "$RUNNER_TEMP" --planned-bytes 536870912
       - name: Observe stable source across actual image remounts
+        env:
+          PROBE_REPORT: ${{ runner.temp }}/dandelion-resume-probe/report.json
         run: python3 scripts/macos_resume_identity_probe.py
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: macos-resume-identity-${{ github.sha }}
-          path: ${{ env.PROBE_REPORT }}
+          path: ${{ runner.temp }}/dandelion-resume-probe/report.json
           if-no-files-found: error
