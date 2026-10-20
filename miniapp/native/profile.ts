@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, statfsSync, unlinkSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, join } from "node:path";
+import { isIP } from "node:net";
 import type { DandelionCliConfig } from "./miniapp-cli-backend.js";
 
 export function reserve(directory: string, planned: number) {
@@ -33,6 +34,18 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
   mkdirSync(stateDirectory, { recursive: true, mode: 0o700 });
   if (lstatSync(stateDirectory).isSymbolicLink()) throw new Error("PRIVATE_STATE_REQUIRED");
   const saved = join(directory, "service.toml");
+  const receiverFile = join(directory, "receiver.json");
+  const validBind = (value: unknown): value is string => {
+    if (typeof value !== "string" || value.length > 80) return false;
+    const parsed = /^(?:\[([^\]]+)\]|([^:]+)):(\d{1,5})$/.exec(value);
+    return !!parsed && !!isIP(parsed[1] ?? parsed[2]!) && Number(parsed[3]) >= 1024 && Number(parsed[3]) <= 65535;
+  };
+  let receiveBind = "127.0.0.1:20000";
+  try {
+    const value: unknown = JSON.parse(boundedFile(receiverFile).toString("utf8"));
+    if (!validBind(value)) throw new Error("INVALID_RECEIVER_BIND");
+    receiveBind = value;
+  } catch (failure) { if ((failure as NodeJS.ErrnoException).code !== "ENOENT") throw new Error("INVALID_RECEIVER_PROFILE"); }
   const command = (config: string, args: string[]) => execFileSync(binaryPath, ["--config", config, "config", ...args], { encoding: "utf8", timeout: 20000, maxBuffer: 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
   const inspect = (config: string): Settings => {
     const parsed = JSON.parse(command(config, ["check", "--json"])) as Settings;
@@ -55,8 +68,16 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
       const remote = settings.transport.mode === "tls";
       return { binaryPath, configPath, allowedRoots: [], authorizePickedRoots: true, stateDirectory,
         targetPools: [{ id: remote ? "configured" : "loopback", label: remote ? "已明确授权的 mTLS 目标" : "本机回环验证" }],
-        ...(remote ? { receive: { targetPoolId: "configured", caFile: tls.ca_file, certificateFile: tls.certificate_file, privateKeyFile: tls.private_key_file, bind: "127.0.0.1:20000", timeoutMs: 60000 } } : {}),
+        ...(remote ? { receive: { targetPoolId: "configured", caFile: tls.ca_file, certificateFile: tls.certificate_file, privateKeyFile: tls.private_key_file, bind: receiveBind, timeoutMs: 60000 } } : {}),
       };
+    },
+    validBind,
+    configureReceiver(bind: string) {
+      if (!validBind(bind) || settings.transport.mode !== "tls") throw new Error("RECEIVER_TLS_REQUIRED");
+      reserve(directory, 1048576);
+      const temporary = join(directory, `receiver-${randomUUID()}.json`);
+      try { writeFileSync(temporary, JSON.stringify(bind), { flag: "wx", mode: 0o600 }); renameSync(temporary, receiverFile); receiveBind = bind; }
+      finally { try { unlinkSync(temporary); } catch { /* already committed */ } }
     },
     prepareImport(path: string) {
       const bytes = boundedFile(path);

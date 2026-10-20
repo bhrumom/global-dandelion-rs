@@ -43,6 +43,12 @@ function main() {
   const invokePackage = async (scope: MiniAppToolScope, method: unknown, args: unknown) => {
     const denied = { ok: false, error: { code: "PACKAGE_TOOL_FAILED", message: "操作未完成，请检查本机配置或重新授权。" } };
     if (scope.appId !== "org.fabushi.global-dandelion") return denied;
+    if (method === "transfer.configureReceiver") {
+      const bind = args && typeof args === "object" ? Reflect.get(args, "bind") : null;
+      if (!profile.validBind(bind) || !profile.options().receive) return { ok: false, error: { code: "RECEIVER_TLS_REQUIRED", message: "请先导入带证书的 mTLS 配置，并填写本机 IP:端口（端口至少 1024）。" } };
+      if (await host("confirmation", { detail: "允许本小程序使用导入的 mTLS 证书，在 " + bind + " 接收传输。配置后仍需点击开始接收。" }) !== true) return denied;
+      try { profile.configureReceiver(bind); backend.cancelAll?.(); backend = createDandelionCliBackend(profile.options(), ports); router = makeRouter(); return { ok: true, data: { bind, configured: true } }; } catch { return denied; }
+    }
     if (typeof method === "string" && /^compat\.(packetInspect|countryLookup|linkExercise|linkRecover)$/.test(method)) {
       try { return { ok: true, data: publicResult(await compatibility(method.split(".")[1]!, args)) }; } catch { return denied; }
     }

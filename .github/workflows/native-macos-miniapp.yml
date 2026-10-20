@@ -40,7 +40,9 @@ jobs:
           printf '[scanner]\nmax_files = 128\nmax_read_bytes = 1073741824\n[transport]\nmode = "loopback"\n[state]\nenabled = false\n' > native-built/default.toml
           native-built/dandelion.bin --config native-built/default.toml self-test --json
       - name: Exercise package-owned runtime and real Rust engine
-        run: node miniapp/scripts/test_native_worker.cjs native-built
+        run: |
+          node miniapp/scripts/test_native_worker.cjs native-built
+          python3 miniapp/scripts/test_native_tls.py native-built
       - name: Build same-revision offline Wasm resources
         run: |
           cargo build --manifest-path miniapp/wasm/Cargo.toml --locked --release --target wasm32-unknown-unknown

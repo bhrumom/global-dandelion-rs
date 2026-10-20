@@ -65,6 +65,7 @@ export interface MiniAppPickPort {
 export interface MiniAppChildHandle {
   readonly done: Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }>;
   kill(): void;
+  snapshot?(): string;
 }
 
 export interface MiniAppSpawnPort {
@@ -117,7 +118,7 @@ function defaultSpawn(binaryPath: string, configPath: string): MiniAppSpawnPort 
         settle({ code: exceeded ? -2 : code ?? -1, stdout, stderr });
       });
     });
-    return { done, kill };
+    return { done, kill, snapshot: () => stdout };
   };
 }
 
@@ -133,6 +134,7 @@ interface Operation {
   state: "running" | "complete" | "failed" | "cancelled";
   result?: unknown;
   error?: string;
+  mode: "single" | "receive";
 }
 
 export function createDandelionCliBackend(
@@ -256,7 +258,7 @@ export function createDandelionCliBackend(
     if (operations.size >= MAX_OPERATIONS) throw new Error("NATIVE_OPERATION_LIMIT");
     const operationId = randomUUID();
     const run = admit(argv);
-    const operation: Operation = { run, state: "running" };
+    const operation: Operation = { run, state: "running", mode };
     operations.set(operationId, operation);
     void finish(run, mode).then((result) => {
       if (operation.state === "cancelled") return;
@@ -363,7 +365,14 @@ export function createDandelionCliBackend(
     async status(operationId) {
       const operation = operations.get(operationId);
       if (!operation) throw new Error("UNKNOWN_OPERATION");
-      return { state: operation.state, result: operation.result, error: operation.error };
+      let ready: { address: string; mutual_tls: true } | undefined;
+      if (operation.mode === "receive" && operation.run.handle.snapshot) {
+        try {
+          const first = JSON.parse(operation.run.handle.snapshot().split("\n")[0]!);
+          if (first.event === "ready" && first.mutual_tls === true && typeof first.address === "string" && first.address.length <= 80) ready = { address: first.address, mutual_tls: true };
+        } catch { /* readiness is not complete yet */ }
+      }
+      return { state: operation.state, result: operation.result, error: operation.error, ready };
     },
     async cancel(operationId) {
       const operation = operations.get(operationId);

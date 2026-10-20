@@ -34,6 +34,7 @@ export const TOOLS = Object.freeze({
   'selection.release': { capability: CAPABILITIES.SELECTION, mutating: false },
   'transfer.send': { capability: CAPABILITIES.TRANSFER, mutating: true },
   'transfer.receive': { capability: CAPABILITIES.TRANSFER, mutating: true },
+  'transfer.configureReceiver': { capability: CAPABILITIES.TRANSFER, mutating: true },
   'transfer.status': { capability: CAPABILITIES.TRANSFER, mutating: false },
   'transfer.cancel': { capability: CAPABILITIES.TRANSFER, mutating: true },
   'scan.metadata': { capability: CAPABILITIES.SCAN, mutating: false },

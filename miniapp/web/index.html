@@ -32,6 +32,8 @@
       <div class="section-head"><h2>配置与原生工具</h2><span>由宿主按权限开放</span></div>
       <p>配置、状态、平台诊断、兼容性和更新都通过同一份受控 Host 契约执行。没有设备级实现的能力会保持隐藏。</p>
       <div class="actions advanced-actions">
+        <label data-native-capability="transfer">接收地址 <input id="receive-bind" type="text" maxlength="80" value="127.0.0.1:20000" autocomplete="off"></label>
+        <button data-native-tool="transfer.configureReceiver" data-native-capability="transfer" class="secondary">授权接收地址</button>
         <button data-native-tool="config.check" data-native-capability="config" class="secondary">读取有效配置</button>
         <button data-native-tool="config.import" data-native-capability="config" class="secondary">导入传输配置与授权目标</button>
         <button data-native-tool="config.defaults" data-native-capability="config" class="secondary">查看默认配置</button>

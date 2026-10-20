@@ -110,7 +110,10 @@ const watchOperation = (operationId, label) => {
       if (current !== transferOperation) return;
       if (!state.ok) { setStatus('transfer-status', `进度不可用：${state.error.message}。可点击停止。`); stopPolling(); return; }
       const phase = String(state.data?.state ?? 'unknown');
-      if (phase === 'running') return;
+      if (phase === 'running') {
+        if (state.data?.ready?.mutual_tls === true) setStatus('transfer-status', `${label}已就绪 · mTLS · ${String(state.data.ready.address)}`);
+        return;
+      }
       stopPolling();
       const bytes = Number(state.data?.result?.verified_payload_bytes ?? 0);
       setStatus('transfer-status', phase === 'complete'
@@ -175,10 +178,12 @@ for (const button of document.querySelectorAll('[data-native-tool]')) {
     const tool = button.dataset.nativeTool;
     if (!tool) return;
     setStatus('advanced-status', `${tool} 执行中…`);
-    const args = tool === 'compat.countryLookup' ? { address: q('country-address').value.trim() } : {};
+    const args = tool === 'compat.countryLookup' ? { address: q('country-address').value.trim() }
+      : tool === 'transfer.configureReceiver' ? { bind: q('receive-bind').value.trim() } : {};
     const result = await host.call(tool, args);
-    if (tool === 'config.import' && result.ok) {
+    if (['config.import', 'transfer.configureReceiver'].includes(tool) && result.ok) {
       transferSelection = null; scanRoot = null;
+      transferOperation = null; stopPolling(); q('cancel-transfer').disabled = true; q('send').disabled = false; q('receive').disabled = false;
       const refreshed = await host.call('offline.capabilities', {});
       if (refreshed.ok && Array.isArray(refreshed.data?.targetPools)) {
         const select = q('target-pool'); select.replaceChildren();

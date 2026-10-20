@@ -49,6 +49,11 @@ App. Current priority is macOS. This supersedes Host-bundled engine composition.
   concurrent mutations, bound copied bytes, retain only the current owned link
   journal, and clean temporary content on completion/close. Practice links on
   private copies, never on original user files; do not expose native paths.
+- GD-MAC11: configure a local receiver bind only after mTLS credentials are
+  imported, validate literal IP/nonprivileged port, explicitly confirm and save
+  per account/app. Report actual Rust readiness and final receipt separately.
+  Actions must run two installed-package workers with real ephemeral PKI,
+  authenticated loopback send/receive, byte verification and cancellation.
 
 ## Packaging, failure and acceptance
 
