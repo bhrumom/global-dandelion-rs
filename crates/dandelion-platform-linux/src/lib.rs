@@ -227,7 +227,13 @@ mod tests {
     fn special_files_are_rejected_without_blocking_and_handle_stamps_change() {
         let dir = tempfile::tempdir().unwrap();
         let fifo = dir.path().join("fifo");
-        rustix::fs::mkfifoat(rustix::fs::CWD, &fifo, Mode::RUSR | Mode::WUSR).unwrap();
+        assert!(
+            std::process::Command::new("/usr/bin/mkfifo")
+                .arg(&fifo)
+                .status()
+                .unwrap()
+                .success()
+        );
         let root = SourceDirectory::open(dir.path()).unwrap();
         assert!(root.open_regular(Path::new("fifo")).is_err());
         let path = dir.path().join("data");

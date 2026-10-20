@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'none'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Global Dandelion · Fabushi</title>
   <link rel="stylesheet" href="app.css">
@@ -24,22 +24,30 @@
     </section>
     <section class="card feature" data-feature="transfer" hidden>
       <div class="section-head"><h2>04 · 受控传输</h2><span>由宿主执行</span></div>
-      <p>文件与目标句柄都由宿主持有，页面只传标识。传输走双向 TLS 1.3，目标必须已在授权池内。</p>
+      <p>文件与目标句柄都由宿主持有，页面只传标识。本机回环只验证本机数据；远程传输使用双向 TLS，目标须已在宿主授权池内。</p>
       <div class="actions"><button id="pick-transfer" class="secondary">选择待发送目录</button><select id="target-pool" aria-label="授权目标池"></select><label class="setting">运行次数 <input id="transfer-repeat" type="number" min="1" max="10000" value="1"></label><label class="setting"><input id="transfer-watch" type="checkbox"> 持续运行</label><label class="setting"><input id="transfer-resume" type="checkbox"> 断点恢复</label><label class="setting"><input id="receive-once" type="checkbox" checked> 接收一次</label><button id="send">开始传输</button><button id="receive" class="secondary">开始接收</button><button id="cancel-transfer" class="secondary" disabled>停止</button></div>
       <p id="transfer-status" role="status" aria-live="polite">尚未开始。</p>
     </section>
-    <section class="card feature" data-feature="config" hidden>
-      <div class="section-head"><h2>06 · 完整能力</h2><span>由宿主按权限开放</span></div>
+    <section class="card feature" data-feature-any="config,state,platform,diagnostics,update,compat" hidden>
+      <div class="section-head"><h2>配置与原生工具</h2><span>由宿主按权限开放</span></div>
       <p>配置、状态、平台诊断、兼容性和更新都通过同一份受控 Host 契约执行。没有设备级实现的能力会保持隐藏。</p>
       <div class="actions advanced-actions">
-        <button data-native-tool="config.defaults" class="secondary">读取有效配置</button>
+        <button data-native-tool="config.check" data-native-capability="config" class="secondary">读取有效配置</button>
+        <button data-native-tool="config.defaults" data-native-capability="config" class="secondary">查看默认配置</button>
+        <button data-native-tool="state.import" class="secondary" data-native-capability="state">导入旧状态</button>
         <button data-native-tool="state.inspect" class="secondary" data-native-capability="state">查看状态</button>
         <button data-native-tool="platform.inspect" class="secondary" data-native-capability="platform">平台检查</button>
         <button data-native-tool="platform.mounts" class="secondary" data-native-capability="platform">挂载检查</button>
+        <button data-native-tool="platform.watch" class="secondary" data-native-capability="platform">观察挂载变化</button>
         <button data-native-tool="platform.time" class="secondary" data-native-capability="platform">时间检查</button>
         <button data-native-tool="diagnostics.selfTest" class="secondary" data-native-capability="diagnostics">自检</button>
         <button data-native-tool="diagnostics.doctor" class="secondary" data-native-capability="diagnostics">诊断</button>
         <button data-native-tool="update.check" class="secondary" data-native-capability="update">检查更新</button>
+        <button data-native-tool="update.stage" class="secondary" data-native-capability="update">验证并暂存更新</button>
+        <label data-native-capability="compat">目标 IP <input id="country-address" type="text" maxlength="45" autocomplete="off" placeholder="查询已配置的国家数据"></label>
+        <button data-native-tool="compat.countryLookup" class="secondary" data-native-capability="compat">查询国家数据</button>
+        <button data-native-tool="compat.linkExercise" class="secondary" data-native-capability="compat">运行链接练习</button>
+        <button data-native-tool="compat.linkRecover" class="secondary" data-native-capability="compat">恢复链接</button>
         <button data-native-tool="compat.packetInspect" class="secondary" data-native-capability="compat">兼容包检查</button>
       </div>
       <p id="advanced-status" role="status" aria-live="polite">尚未运行高级能力。</p>
@@ -53,11 +61,11 @@
     <section class="card feature" data-feature="hotspot" hidden>
       <div class="section-head"><h2>06 · 热点</h2><span>需要显式确认</span></div>
       <p>只改动本程序自己创建的临时配置；回滚会尊重之后的人工修改。</p>
-      <div class="actions"><button id="hotspot-plan" class="secondary">生成方案</button><button id="hotspot-apply">应用</button><button id="hotspot-stop" class="secondary">停止</button></div>
+      <div class="actions"><button id="hotspot-plan" class="secondary">生成方案</button><button id="hotspot-apply">应用</button><button data-native-tool="hotspot.status" class="secondary" data-native-capability="hotspot">查询状态</button><button id="hotspot-stop" class="secondary">停止</button></div>
       <p id="hotspot-status" role="status" aria-live="polite">未应用热点配置。</p>
     </section>
     <section class="card"><div class="section-head"><h2>07 · 本次结果</h2><button id="export" class="secondary" disabled>导出报告</button></div><div class="stats"><div><span>完整校验文件</span><strong id="file-count">0</strong></div><div><span>完整校验包</span><strong id="packet-count">0</strong></div><div><span>本地校验字节</span><strong id="byte-count">0 B</strong></div></div><ul id="results" aria-label="文件结果"></ul><p class="note">报告包含你选择的文件名和汇总数，不包含文件内容。刷新或关闭会清除本次选择和结果。</p></section>
-    <details class="card"><summary>能力、数据与来源</summary><p>离线资源包：HTML / CSS / JavaScript / Rust WebAssembly。来源为同仓库 PR #1 的 dandelion-core 和 dandelion-packet。</p><p>本页面自身不发起网络请求，也不直接访问文件系统。传输、扫描与热点由宿主通过声明式工具执行；宿主未提供的能力会整块隐藏，不会降级为隐式权限。</p><p>文件与结果只保存在当前页面内存。显示偏好可以保存在当前小程序的 Web 存储中；宿主必须提供账号与小程序隔离。</p><label class="setting"><input id="remember" type="checkbox">记住显示偏好</label><button id="clear" class="secondary">删除已保存的显示偏好</button><p id="storage-status" role="status"></p><p>版本 0.2.0 · MIT OR Apache-2.0。依赖许可证随发行包提供。</p></details>
+    <details class="card"><summary>能力、数据与来源</summary><p>离线资源包：HTML / CSS / JavaScript / Rust WebAssembly。来源为同仓库 PR #1 的 dandelion-core 和 dandelion-packet。</p><p>本页面自身不发起网络请求，也不直接访问文件系统。传输、扫描与热点由宿主通过声明式工具执行；宿主未提供的能力会整块隐藏，不会降级为隐式权限。</p><p>文件与结果只保存在当前页面内存。显示偏好可以保存在当前小程序的 Web 存储中；宿主必须提供账号与小程序隔离。</p><label class="setting"><input id="remember" type="checkbox">记住显示偏好</label><button id="clear" class="secondary">删除已保存的显示偏好</button><p id="storage-status" role="status"></p><p>版本 __FABUSHI_APP_VERSION__ · MIT OR Apache-2.0。依赖许可证随发行包提供。</p></details>
     <footer>你的文件，你的选择。所有校验在本地完成。</footer>
   </main>
   <script type="module" src="app.js"></script>

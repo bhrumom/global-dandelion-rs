@@ -84,13 +84,43 @@ controls();
 import { connectHost, registerPageTools, formatBytes } from './host-tools.js';
 
 const host = await connectHost();
-const featureSections = [...document.querySelectorAll('[data-feature]')];
-for (const section of featureSections) section.hidden = !host.capabilities.has(section.dataset.feature);
+// Controls remain within the same signed Web bundle on every platform.
+const featureSections = [...document.querySelectorAll('[data-feature], [data-feature-any]')];
+for (const section of featureSections) {
+  const required = (section.dataset.featureAny ?? section.dataset.feature).split(',');
+  section.hidden = !required.some(capability => host.capabilities.has(capability));
+}
 q('host-badge').textContent = host.available ? `宿主已连接 · ${host.platform}` : '仅离线能力';
 
 let transferSelection = null, transferOperation = null, transferTimer = null, scanRoot = null;
 const setStatus = (id, text) => { q(id).textContent = text; };
 const stopPolling = () => { if (transferTimer !== null) { clearInterval(transferTimer); transferTimer = null; } };
+const watchOperation = (operationId, label) => {
+  transferOperation = operationId;
+  q('cancel-transfer').disabled = false; q('send').disabled = true; q('receive').disabled = true;
+  setStatus('transfer-status', `${label}已启动，等待宿主返回校验结果…`);
+  stopPolling();
+  let polling = false;
+  transferTimer = setInterval(async () => {
+    if (polling || !transferOperation) return;
+    polling = true;
+    const current = transferOperation;
+    try {
+      const state = await host.call('transfer.status', { operationId: current });
+      if (current !== transferOperation) return;
+      if (!state.ok) { setStatus('transfer-status', `进度不可用：${state.error.message}。可点击停止。`); stopPolling(); return; }
+      const phase = String(state.data?.state ?? 'unknown');
+      if (phase === 'running') return;
+      stopPolling();
+      const bytes = Number(state.data?.result?.verified_payload_bytes ?? 0);
+      setStatus('transfer-status', phase === 'complete'
+        ? `${label}完成，已校验 ${formatBytes(bytes)}。`
+        : phase === 'cancelled' ? `${label}已停止。` : `${label}失败：${String(state.data?.error ?? '未知原因')}`);
+      q('cancel-transfer').disabled = true; q('send').disabled = false; q('receive').disabled = false;
+      transferOperation = null;
+    } finally { polling = false; }
+  }, 1500);
+};
 
 if (host.capabilities.has('transfer')) {
   const poolSelect = q('target-pool');
@@ -121,45 +151,32 @@ if (host.capabilities.has('transfer')) {
       resume,
     });
     if (!sent.ok) { setStatus('transfer-status', `传输未启动：${sent.error.message}`); return; }
-    transferOperation = String(sent.data.operationId);
-    q('cancel-transfer').disabled = false; q('send').disabled = true;
-    setStatus('transfer-status', '传输已启动，正在等待宿主回报进度…');
-    stopPolling();
-    transferTimer = setInterval(async () => {
-      if (!transferOperation) { stopPolling(); return; }
-      const state = await host.call('transfer.status', { operationId: transferOperation });
-      if (!state.ok) { setStatus('transfer-status', `进度不可用：${state.error.message}`); stopPolling(); return; }
-      const phase = String(state.data?.state ?? 'unknown');
-      if (phase === 'running') return;
-      stopPolling();
-      setStatus('transfer-status', phase === 'complete'
-        ? '传输完成。'
-        : phase === 'cancelled' ? '传输已停止。' : `传输失败：${String(state.data?.error ?? '未知原因')}`);
-      q('cancel-transfer').disabled = true; q('send').disabled = false;
-      transferOperation = null;
-    }, 1500);
+    watchOperation(String(sent.data.operationId), '传输');
   };
   q('receive').onclick = async () => {
     const received = await host.call('transfer.receive', { targetPoolId: q('target-pool').value, once: q('receive-once').checked });
-    setStatus('transfer-status', received.ok ? `接收已启动（${String(received.data?.operationId ?? '—').slice(0, 8)}…）。` : `接收未启动：${received.error.message}`);
+    if (received.ok) watchOperation(String(received.data.operationId), '接收');
+    else setStatus('transfer-status', `接收未启动：${received.error.message}`);
   };
   q('cancel-transfer').onclick = async () => {
     if (!transferOperation) return;
     const stopped = await host.call('transfer.cancel', { operationId: transferOperation });
     stopPolling();
     setStatus('transfer-status', stopped.ok ? '已请求停止传输。' : `停止失败：${stopped.error.message}`);
-    transferOperation = null; q('cancel-transfer').disabled = true; q('send').disabled = false;
+    transferOperation = null; q('cancel-transfer').disabled = true; q('send').disabled = false; q('receive').disabled = false;
   };
 }
 
+for (const element of document.querySelectorAll('[data-native-capability]')) {
+  element.hidden = !host.capabilities.has(element.dataset.nativeCapability);
+}
 for (const button of document.querySelectorAll('[data-native-tool]')) {
-  const capability = button.dataset.nativeCapability;
-  if (capability && !host.capabilities.has(capability)) button.hidden = true;
   button.addEventListener('click', async () => {
     const tool = button.dataset.nativeTool;
     if (!tool) return;
     setStatus('advanced-status', `${tool} 执行中…`);
-    const result = await host.call(tool, {});
+    const args = tool === 'compat.countryLookup' ? { address: q('country-address').value.trim() } : {};
+    const result = await host.call(tool, args);
     setStatus('advanced-status', result.ok
       ? `${tool} 完成：${JSON.stringify(result.data ?? {}).slice(0, 600)}`
       : `${tool} 失败：${result.error.message}`);
@@ -178,7 +195,7 @@ if (host.capabilities.has('scan')) {
     setStatus('scan-status', '扫描中…');
     const result = await host.call(tool, { rootId: scanRoot });
     setStatus('scan-status', result.ok
-      ? `完成：${Number(result.data?.files ?? 0)} 个文件 · ${formatBytes(Number(result.data?.bytes ?? 0))}`
+      ? `完成：${Number(result.data?.regular_files ?? result.data?.files_completed ?? 0)} 个文件 · ${formatBytes(Number(result.data?.total_file_bytes ?? result.data?.verified_payload_bytes ?? 0))}`
       : `扫描失败：${result.error.message}`);
   };
   q('scan-metadata').onclick = runScan('scan.metadata');

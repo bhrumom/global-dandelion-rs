@@ -46,6 +46,7 @@ export const TOOLS = Object.freeze({
   'platform.mounts': { capability: CAPABILITIES.PLATFORM, mutating: false },
   'platform.time': { capability: CAPABILITIES.PLATFORM, mutating: false },
   'platform.watch': { capability: CAPABILITIES.PLATFORM, mutating: false },
+  'hotspot.status': { capability: CAPABILITIES.HOTSPOT, mutating: false },
   'hotspot.plan': { capability: CAPABILITIES.HOTSPOT, mutating: false },
   'hotspot.apply': { capability: CAPABILITIES.HOTSPOT, mutating: true },
   'hotspot.stop': { capability: CAPABILITIES.HOTSPOT, mutating: true },

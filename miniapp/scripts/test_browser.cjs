@@ -70,7 +70,35 @@ async function awaitBrowser() {
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); count++;
     await page.screenshot({ path: 'miniapp-ui-narrow.png', fullPage: true });
-    console.log(JSON.stringify({ tests: count, source: process.env.TESTED_COMMIT, result: 'pass', scope: 'offline-browser-fixture-not-Fabushi-installed-acceptance' }));
+    // UI fixture only: installed native execution is verified in Fabushi Host CI.
+    await context.addInitScript(() => {
+      globalThis.fabushi = { invoke: async (tool) => {
+        const data = tool === 'offline.capabilities'
+          ? { contract: 'fabushi.miniapp.tools.v1', platform: 'desktop', capabilities: ['offline', 'selection', 'scan', 'transfer', 'config', 'state', 'compat'], targetPools: [{ id: 'local', label: 'Local fixture' }] }
+          : tool === 'selection.pick' ? { selectionId: 'fixture-root', entries: [{ name: 'fixture', size: 7 }] }
+          : tool === 'scan.metadata' ? { regular_files: 2, total_file_bytes: 7, payload_bytes_read: 0 }
+          : tool === 'scan.read' ? { files_completed: 2, verified_payload_bytes: 7 }
+          : tool === 'transfer.receive' ? { operationId: 'fixture-receive' }
+          : tool === 'transfer.status' ? { state: 'complete', result: { verified_payload_bytes: 7 } }
+          : { imported: true };
+        return { ok: true, data };
+      } };
+    });
+    await page.reload();
+    await page.locator('#pick-root').waitFor({ state: 'visible' });
+    await page.locator('#pick-root').click();
+    await page.locator('#scan-metadata').click();
+    await page.waitForFunction(() => document.getElementById('scan-status').textContent.includes('2 个文件 · 7 B')); count++;
+    await page.locator('#scan-read').click();
+    await page.waitForFunction(() => document.getElementById('scan-status').textContent.includes('2 个文件 · 7 B')); count++;
+    await page.locator('#receive').click();
+    await page.waitForFunction(() => document.getElementById('transfer-status').textContent.includes('接收完成，已校验 7 B')); count++;
+    assert.equal(await page.locator('#send').isEnabled(), true); count++;
+    await page.locator('[data-native-tool="state.import"]').click();
+    await page.waitForFunction(() => document.getElementById('advanced-status').textContent.includes('imported')); count++;
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); count++;
+    await page.screenshot({ path: 'miniapp-ui-native-narrow.png', fullPage: true });
+    console.log(JSON.stringify({ tests: count, source: process.env.TESTED_COMMIT, result: 'pass', scope: 'offline-and-native-ui-fixture-not-Fabushi-installed-acceptance' }));
   } finally { await context.close(); await instance.close(); }
 }
 browser.catch(error => { console.error(error); process.exitCode = 1; });
