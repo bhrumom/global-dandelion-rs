@@ -43,6 +43,8 @@ def prepare(pkg, output, source_commit, version, platforms):
     for item in (ROOT / "miniapp/web").iterdir():
         if item.is_file():
             shutil.copyfile(item, output / item.name)
+    app_js = output / "app.js"
+    app_js.write_text(app_js.read_text(encoding="utf-8").replace("__FABUSHI_APP_VERSION__", version), encoding="utf-8")
     (output / "pkg").mkdir()
     for name in ["dandelion_web_adapter.js", "dandelion_web_adapter_bg.wasm"]:
         shutil.copyfile(pkg / name, output / "pkg" / name)
@@ -140,7 +142,7 @@ def main():
     parser.add_argument("--resources", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--version", default="0.3.2")
+    parser.add_argument("--version", default="0.3.3")
     parser.add_argument("--platforms", default="desktop,ios,android")
     parser.add_argument("--inline-html", type=Path,
                         help="also write a single self-contained HTML for Android string injection")
