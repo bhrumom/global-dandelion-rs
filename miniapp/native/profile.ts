@@ -83,7 +83,7 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
 /** Display-safe output: native file/credential paths remain only in this process. */
 export function publicResult(value: unknown, key = ""): unknown {
   if (["roots", "allowed_mount_prefixes"].includes(key) && Array.isArray(value)) return { count: value.length };
-  if ((key.endsWith("_file") || key === "directory") && typeof value === "string") return value ? "已在本机配置" : "未配置";
+  if ((key.endsWith("_file") || ["directory", "workspace", "source"].includes(key)) && typeof value === "string") return value ? "已在本机配置" : "未配置";
   if (Array.isArray(value)) return value.map(item => publicResult(item));
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, publicResult(item, name)]));
   return value;

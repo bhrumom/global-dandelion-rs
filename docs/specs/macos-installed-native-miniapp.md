@@ -44,6 +44,11 @@ App. Current priority is macOS. This supersedes Host-bundled engine composition.
   the authenticated package using the CLI updater. Installation closes old code
   and requires reopening the verified replacement; update denial/network failure
   leaves the current package usable.
+- GD-MAC10: compatibility inspection/country lookup/link exercise/recovery invoke
+  the actual Rust implementations. Pick files explicitly, reject symlinks and
+  concurrent mutations, bound copied bytes, retain only the current owned link
+  journal, and clean temporary content on completion/close. Practice links on
+  private copies, never on original user files; do not expose native paths.
 
 ## Packaging, failure and acceptance
 

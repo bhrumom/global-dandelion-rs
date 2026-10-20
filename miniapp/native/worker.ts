@@ -6,6 +6,7 @@ import { createDandelionCliBackend } from "./miniapp-cli-backend.js";
 import { createMiniAppToolRouter, type MiniAppToolScope } from "./miniapp-tools.js";
 import { createProfile, publicResult } from "./profile.js";
 import { macObservation } from "./macos.js";
+import { createCompatibility } from "./compat.js";
 
 function main() {
   const context = new AsyncLocalStorage<string>();
@@ -38,9 +39,13 @@ function main() {
   let backend = createDandelionCliBackend(profile.options(), ports);
   const makeRouter = () => createMiniAppToolRouter({ backend, allowedAppId: "org.fabushi.global-dandelion", approve: async tool => await host("confirmation", { detail: tool }) === true });
   let router = makeRouter();
+  const compatibility = createCompatibility(join(__dirname, "dandelion.bin"), __dirname, host);
   const invokePackage = async (scope: MiniAppToolScope, method: unknown, args: unknown) => {
     const denied = { ok: false, error: { code: "PACKAGE_TOOL_FAILED", message: "操作未完成，请检查本机配置或重新授权。" } };
     if (scope.appId !== "org.fabushi.global-dandelion") return denied;
+    if (typeof method === "string" && /^compat\.(packetInspect|countryLookup|linkExercise|linkRecover)$/.test(method)) {
+      try { return { ok: true, data: publicResult(await compatibility(method.split(".")[1]!, args)) }; } catch { return denied; }
+    }
     if (method === "update.check" || method === "update.stage") {
       try {
         if (method === "update.stage" && await host("confirmation", { detail: "安装本小程序已审核的更新；旧代码和运行任务将关闭，需重新打开。" }) !== true) return denied;
@@ -68,6 +73,7 @@ function main() {
       const data = result.data as { capabilities: string[] };
       if (process.platform === "darwin" && !data.capabilities.includes("platform")) data.capabilities.push("platform");
       if (!data.capabilities.includes("update")) data.capabilities.push("update");
+      if (!data.capabilities.includes("compat")) data.capabilities.push("compat");
     }
     return publicResult(result);
   };

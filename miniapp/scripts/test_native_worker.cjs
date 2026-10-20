@@ -15,6 +15,7 @@ const { randomUUID } = require('node:crypto');
   await writeFile(importFile, '[scanner]\nroots=["/tmp/imported-root"]\nallowed_mount_prefixes=["/tmp/imported-mount"]\n[state]\nenabled=true\ndirectory="/tmp/unscoped-shared-state"\n');
   const worker = spawn(process.execPath, [path.resolve(process.argv[2], 'worker.cjs')], { env: { ...process.env, FABUSHI_NATIVE_DATA_DIRECTORY: privateData }, stdio: ['pipe', 'pipe', 'inherit'] });
   const pending = new Map();
+  const pickFiles = [];
   let buffer = '';
   const scope = { appId: 'org.fabushi.global-dandelion', version: '0.4.0', packageDigest: 'a'.repeat(64), accountScope: 'b'.repeat(64), accountGeneration: 1 };
   const send = value => worker.stdin.write(JSON.stringify(value) + '\n');
@@ -32,7 +33,7 @@ const { randomUUID } = require('node:crypto');
         else {
           assert.equal(message.method, 'file-picker');
           assert.ok(['directory', 'files'].includes(message.mode));
-          send({ kind: 'host-result', callId: message.callId, result: [{ path: message.mode === 'directory' ? fixture : importFile, name: 'fixture', size: 0 }] });
+          send({ kind: 'host-result', callId: message.callId, result: [{ path: message.mode === 'directory' ? fixture : pickFiles.shift() || importFile, name: 'fixture', size: 0 }] });
         }
       } else { assert.equal(message.kind, 'result'); const resolve = pending.get(message.id); assert.ok(resolve); pending.delete(message.id); resolve(message.result); }
     }
@@ -46,7 +47,7 @@ const { randomUUID } = require('node:crypto');
   try {
     const capabilities = await call('offline.capabilities');
     assert.equal(capabilities.ok, true);
-    for (const c of ['selection', 'scan', 'transfer', 'state', 'config', 'platform', 'diagnostics', 'update']) assert.ok(capabilities.data.capabilities.includes(c));
+    for (const c of ['selection', 'scan', 'transfer', 'state', 'config', 'platform', 'diagnostics', 'update', 'compat']) assert.ok(capabilities.data.capabilities.includes(c));
     assert.ok(!capabilities.data.capabilities.includes('hotspot'));
     const selftest = await call('diagnostics.selfTest');
     assert.equal(selftest.ok, true); assert.equal(selftest.data.verified_payload_bytes, 65537);
@@ -80,6 +81,20 @@ const { randomUUID } = require('node:crypto');
     assert.equal(await readFile(path.join(privateData, 'service.toml'), 'utf8'), stored);
     assert.equal((await call('state.inspect')).ok, true);
     const update = await call('update.check'); assert.equal(update.ok, true); assert.equal(update.data.updateAvailable, false);
+    const packet = path.join(privateData, 'packet.bin');
+    await writeFile(packet, Buffer.from('00000007900150983cd24fb0d6963f7d28e17f72616263', 'hex'));
+    pickFiles.push(packet);
+    const inspected = await call('compat.packetInspect'); assert.equal(inspected.ok, true); assert.equal(inspected.data.index, 7); assert.equal(inspected.data.authenticated, false);
+    const locations = path.join(privateData, 'locations.csv'), blocks = path.join(privateData, 'blocks.csv');
+    await writeFile(locations, 'geoname_id,country_name\n1,Test Country\n');
+    await writeFile(blocks, 'network,geoname_id\n192.0.2.0/24,1\n');
+    pickFiles.push(locations, blocks);
+    const country = await call('compat.countryLookup', { address: '192.0.2.7' });
+    assert.equal(country.ok, true); assert.equal(country.data.country, 'Test Country'); assert.equal(country.data.authorized, false);
+    pickFiles.push(path.join(fixture, 'payload.txt'));
+    const linked = await call('compat.linkExercise'); assert.equal(linked.ok, true); assert.equal(linked.data.completed_cycles, 10);
+    assert.equal((await call('compat.linkRecover')).ok, true);
+    assert.equal(await readFile(path.join(fixture, 'payload.txt'), 'utf8'), 'actual native payload');
     console.log('package-owned native worker: actual engine, scan, loopback, release and invalid-ID rejection passed');
   } finally {
     worker.kill('SIGTERM');
