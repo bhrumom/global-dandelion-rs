@@ -84,7 +84,7 @@ pub fn execute(cli: &Cli) -> Result<u8> {
         }
         Command::Doctor => {
             output::json(
-                &serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"target":env!("DANDELION_BUILD_TARGET"),"source_access":if cfg!(target_os = "linux") {"Linux 5.6+ openat2"} else {"Apple held-directory openat/NOFOLLOW"},"disk":dandelion_platform_linux::disk_space(&std::env::current_dir()?)?,"network":"no diagnostics traffic sent"}),
+                &serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"target":env!("DANDELION_BUILD_TARGET"),"native_contract":if cfg!(target_vendor = "apple") {"dandelion.native.apple.v1"} else {"dandelion.native.linux.v1"},"source_access":if cfg!(target_os = "linux") {"Linux 5.6+ openat2"} else {"Apple held-directory openat/NOFOLLOW"},"disk":dandelion_platform_linux::disk_space(&std::env::current_dir()?)?,"network":"no diagnostics traffic sent"}),
             )?;
             Ok(0)
         }
