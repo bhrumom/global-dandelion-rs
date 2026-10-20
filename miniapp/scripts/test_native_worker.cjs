@@ -28,6 +28,7 @@ const { randomUUID } = require('node:crypto');
       if (message.kind === 'host') {
         assert.ok(pending.has(message.id));
         if (message.method === 'confirmation') send({ kind: 'host-result', callId: message.callId, result: true });
+        else if (message.method === 'package-update') send({ kind: 'host-result', callId: message.callId, result: { installedVersion: '0.4.0', availableVersion: '0.4.0', updateAvailable: false } });
         else {
           assert.equal(message.method, 'file-picker');
           assert.ok(['directory', 'files'].includes(message.mode));
@@ -45,7 +46,7 @@ const { randomUUID } = require('node:crypto');
   try {
     const capabilities = await call('offline.capabilities');
     assert.equal(capabilities.ok, true);
-    for (const c of ['selection', 'scan', 'transfer', 'state', 'config', 'platform', 'diagnostics']) assert.ok(capabilities.data.capabilities.includes(c));
+    for (const c of ['selection', 'scan', 'transfer', 'state', 'config', 'platform', 'diagnostics', 'update']) assert.ok(capabilities.data.capabilities.includes(c));
     assert.ok(!capabilities.data.capabilities.includes('hotspot'));
     const selftest = await call('diagnostics.selfTest');
     assert.equal(selftest.ok, true); assert.equal(selftest.data.verified_payload_bytes, 65537);
@@ -78,6 +79,7 @@ const { randomUUID } = require('node:crypto');
     assert.equal((await call('config.import')).ok, false);
     assert.equal(await readFile(path.join(privateData, 'service.toml'), 'utf8'), stored);
     assert.equal((await call('state.inspect')).ok, true);
+    const update = await call('update.check'); assert.equal(update.ok, true); assert.equal(update.data.updateAvailable, false);
     console.log('package-owned native worker: actual engine, scan, loopback, release and invalid-ID rejection passed');
   } finally {
     worker.kill('SIGTERM');

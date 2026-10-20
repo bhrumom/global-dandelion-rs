@@ -82,7 +82,7 @@ def prepare(pkg, output, source_commit, version, platforms, native_dir=None):
             'schema': 'fabushi.native-runtime.v1', 'platform': 'darwin',
             'architecture': 'arm64', 'entrypoint': 'native/worker.cjs',
             'executables': ['native/dandelion.bin'],
-            'hostCapabilities': ['file-picker', 'confirmation'],
+            'hostCapabilities': ['file-picker', 'confirmation', 'package-update'],
         }))
     for path in sorted(output.rglob("*")):
         if not path.is_file():

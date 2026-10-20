@@ -41,6 +41,12 @@ function main() {
   const invokePackage = async (scope: MiniAppToolScope, method: unknown, args: unknown) => {
     const denied = { ok: false, error: { code: "PACKAGE_TOOL_FAILED", message: "操作未完成，请检查本机配置或重新授权。" } };
     if (scope.appId !== "org.fabushi.global-dandelion") return denied;
+    if (method === "update.check" || method === "update.stage") {
+      try {
+        if (method === "update.stage" && await host("confirmation", { detail: "安装本小程序已审核的更新；旧代码和运行任务将关闭，需重新打开。" }) !== true) return denied;
+        return { ok: true, data: await host("package-update", { action: method === "update.check" ? "check" : "stage" }) };
+      } catch { return denied; }
+    }
     if (method === "config.import") {
       let candidate: ReturnType<typeof profile.prepareImport> | undefined;
       try {
@@ -61,6 +67,7 @@ function main() {
     if (method === "offline.capabilities" && result.ok && result.data && typeof result.data === "object") {
       const data = result.data as { capabilities: string[] };
       if (process.platform === "darwin" && !data.capabilities.includes("platform")) data.capabilities.push("platform");
+      if (!data.capabilities.includes("update")) data.capabilities.push("update");
     }
     return publicResult(result);
   };
@@ -77,7 +84,9 @@ function main() {
     if (message.kind === "host-result" && typeof message.callId === "string") {
       const pending = hostCalls.get(message.callId);
       if (!pending) throw new Error("UNKNOWN_HOST_RESPONSE");
-      clearTimeout(pending.timer); hostCalls.delete(message.callId); pending.resolve(message.result);
+      clearTimeout(pending.timer); hostCalls.delete(message.callId);
+      if (message.error) pending.reject(new Error("HOST_OPERATION_FAILED"));
+      else pending.resolve(message.result);
       return;
     }
     if (message.kind !== "invoke" || typeof message.id !== "string" || active >= 8 || !message.scope || typeof message.scope !== "object") throw new Error("INVALID_INVOCATION");

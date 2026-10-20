@@ -39,6 +39,11 @@ App. Current priority is macOS. This supersedes Host-bundled engine composition.
 - GD-MAC08: native macOS observation uses bounded fixed-path OS commands and Node
   OS APIs inside the installed package. Expose read-only inventory/time/mount
   observations and bounded watch; observations never authorize a source/target.
+- GD-MAC09: update checks/installation use the generic Host broker only for this
+  installed app's approved catalog release. Never self-patch an executable inside
+  the authenticated package using the CLI updater. Installation closes old code
+  and requires reopening the verified replacement; update denial/network failure
+  leaves the current package usable.
 
 ## Packaging, failure and acceptance
 
