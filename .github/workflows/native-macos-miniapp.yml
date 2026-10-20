@@ -18,6 +18,8 @@ jobs:
           ref: ${{ env.TESTED_COMMIT }}
       - name: Disk preflight
         run: python3 scripts/disk_guard.py --path . --planned-bytes 8589934592
+      - name: Use the same pinned OpenSSL fixture provider as native Apple acceptance
+        run: echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.98.1

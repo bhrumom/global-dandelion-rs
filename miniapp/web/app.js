@@ -98,7 +98,7 @@ const stopPolling = () => { if (transferTimer !== null) { clearInterval(transfer
 const watchOperation = (operationId, label) => {
   transferOperation = operationId;
   q('cancel-transfer').disabled = false; q('send').disabled = true; q('receive').disabled = true;
-  setStatus('transfer-status', `${label}已启动，等待宿主返回校验结果…`);
+  setStatus('transfer-status', `${label}已启动，等待小程序原生引擎返回校验结果…`);
   stopPolling();
   let polling = false;
   transferTimer = setInterval(async () => {

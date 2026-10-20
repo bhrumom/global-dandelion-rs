@@ -18,6 +18,8 @@ from disk_guard import check
 assert os.environ.get('GITHUB_ACTIONS') == 'true', 'Actions-only native execution'
 runtime = Path(sys.argv[1]).resolve()
 check(Path(tempfile.gettempdir()), 64 * 1024**2)
+provider = subprocess.run(['openssl', 'version'], capture_output=True, text=True, check=True, timeout=5)
+assert provider.stdout.startswith('OpenSSL 3.'), 'use the existing OpenSSL 3 Apple fixture provider'
 
 
 class Worker:
