@@ -79,10 +79,11 @@ def prepare(pkg, output, source_commit, version, platforms):
         # descriptor and in BUILD-INFO.txt instead.
         "displayName": "Global Dandelion 离线工作台",
         "entrypoint": "index.html", "runtime": "web", "minHostApi": 1,
-        "offlineCore": True, "requestedCapabilities": [
-            "transfer", "scan", "state", "config", "platform", "hotspot",
-            "update", "diagnostics", "compat",
-        ],
+        # Native Host tools are discovered and authorized at runtime through
+        # fabushi.miniapp.tools.v1. The package manifest must not self-grant
+        # native capabilities; the production signer and Host both reject
+        # requested capabilities in a catalog fabapp.
+        "offlineCore": True, "requestedCapabilities": [],
         "networkPolicy": {"mode": "deny", "allowedOrigins": []}, "files": files,
     }
     (output / "manifest.unsigned.json").write_bytes(canonical(manifest))
