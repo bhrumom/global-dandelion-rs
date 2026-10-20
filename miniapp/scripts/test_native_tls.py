@@ -127,7 +127,19 @@ authorized = true
         operation = receiver.call('transfer.receive', {'targetPoolId': 'configured', 'once': True})['operationId']
         for attempt in range(30):
             state = receiver.call('transfer.status', {'operationId': operation})
-            assert state['state'] == 'running', ('receiver failed before readiness', state)
+            if state['state'] != 'running':
+                # Only ephemeral fixture credentials exist here; compare the exact
+                # native command independently without exposing diagnostics to Web.
+                raw = subprocess.Popen([str(runtime / 'dandelion.bin'), 'receive', '--bind', '127.0.0.1:0',
+                                        '--ca-file', str(root / 'ca.pem'), '--certificate-file', str(root / 'server.pem'),
+                                        '--private-key-file', str(root / 'server.key'), '--timeout-ms', '100', '--json'],
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                try:
+                    stdout, stderr = raw.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    raw.kill()
+                    stdout, stderr = raw.communicate(timeout=2)
+                raise AssertionError(('receiver failed before readiness', state, raw.returncode, stdout[:500], stderr[:1000]))
             if state.get('ready'):
                 assert state['ready'] == {'address': address, 'mutual_tls': True}
                 break

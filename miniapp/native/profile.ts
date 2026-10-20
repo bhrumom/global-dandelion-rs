@@ -36,26 +36,27 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
   if (lstatSync(stateDirectory).isSymbolicLink()) throw new Error("PRIVATE_STATE_REQUIRED");
   const saved = join(directory, "service.toml");
   const receiverFile = join(directory, "receiver.json");
-  const validBind = (value: unknown): value is string => {
+  const validBind = (value: unknown, requireLocal = false): value is string => {
     if (typeof value !== "string" || value.length > 80) return false;
     const parsed = /^(?:\[([^\]]+)\]|([^:]+)):(\d{1,5})$/.exec(value);
     const ip = parsed?.[1] ?? parsed?.[2];
     return !!parsed && !!ip && !!isIP(ip) && Number(parsed[3]) >= 1024 && Number(parsed[3]) <= 65535
-      && Object.values(networkInterfaces()).some(entries => entries?.some(entry => entry.address === ip));
+      && (!requireLocal || Object.values(networkInterfaces()).some(entries => entries?.some(entry => entry.address === ip)));
   };
   let receiveBind = "127.0.0.1:20000";
+  let receiverError: string | null = null;
   try {
     const value: unknown = JSON.parse(boundedFile(receiverFile).toString("utf8"));
     if (!validBind(value)) throw new Error("INVALID_RECEIVER_BIND");
     receiveBind = value;
-  } catch (failure) { if ((failure as NodeJS.ErrnoException).code !== "ENOENT") throw new Error("INVALID_RECEIVER_PROFILE"); }
+  } catch (failure) { if ((failure as NodeJS.ErrnoException).code !== "ENOENT") receiverError = "接收地址配置损坏，已停用原地址；请重新授权本机接收地址。"; }
   const command = (config: string, args: string[]) => execFileSync(binaryPath, ["--config", config, "config", ...args], { encoding: "utf8", timeout: 20000, maxBuffer: 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
   const inspect = (config: string): Settings => {
     const parsed = JSON.parse(command(config, ["check", "--json"])) as Settings;
     if (parsed.transport.mode === "tls" && [parsed.transport.tls.ca_file, parsed.transport.tls.certificate_file, parsed.transport.tls.private_key_file].some(p => !isAbsolute(p))) throw new Error("ABSOLUTE_CREDENTIAL_PATHS_REQUIRED");
     return parsed;
   };
-  let configPath = defaultPath, settings = inspect(defaultPath), error: string | null = null;
+  let configPath = defaultPath, settings = inspect(defaultPath), error: string | null = receiverError;
   try {
     boundedFile(saved);
     const candidate = inspect(saved);
@@ -76,10 +77,10 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
     },
     validBind,
     configureReceiver(bind: string) {
-      if (!validBind(bind) || settings.transport.mode !== "tls") throw new Error("RECEIVER_TLS_REQUIRED");
+      if (!validBind(bind, true) || settings.transport.mode !== "tls") throw new Error("RECEIVER_TLS_REQUIRED");
       reserve(directory, 1048576);
       const temporary = join(directory, `receiver-${randomUUID()}.json`);
-      try { writeFileSync(temporary, JSON.stringify(bind), { flag: "wx", mode: 0o600 }); renameSync(temporary, receiverFile); receiveBind = bind; }
+      try { writeFileSync(temporary, JSON.stringify(bind), { flag: "wx", mode: 0o600 }); renameSync(temporary, receiverFile); receiveBind = bind; error = null; }
       finally { try { unlinkSync(temporary); } catch { /* already committed */ } }
     },
     prepareImport(path: string) {

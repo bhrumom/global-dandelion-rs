@@ -233,7 +233,17 @@ export function createDandelionCliBackend(
     catch { throw new Error("DANDELION_PROCESS_FAILED"); }
     if (run.cancelled) throw new Error("DANDELION_CANCELLED");
     if (run.timedOut) throw new Error("DANDELION_TIMEOUT");
-    if (result.code !== 0) throw new Error(`DANDELION_EXIT_${result.code}`);
+    if (result.code !== 0) {
+      const safeErrors: Record<string, string> = {
+        "invalid configuration: invalid TLS credentials or trust configuration": "TLS_CREDENTIALS_INVALID",
+        "invalid configuration: credentials must be bounded regular files; private keys require private permissions and no hard links": "CREDENTIAL_FILE_POLICY",
+        "invalid configuration: receiver requires bounded sessions, timeout, rate and positive traffic budget": "RECEIVER_LIMITS_INVALID",
+        "invalid configuration: non-loopback listen requires --allow-remote and an explicit --allowed-client list": "RECEIVER_AUTH_REQUIRED",
+      };
+      let category: string | undefined;
+      try { category = safeErrors[JSON.parse(result.stderr.trim().split("\n").at(-1)!).error]; } catch { /* raw diagnostics never cross the bridge */ }
+      throw new Error(category ?? `DANDELION_EXIT_${result.code}`);
+    }
     return parseResult(result.stdout, mode);
   };
 
