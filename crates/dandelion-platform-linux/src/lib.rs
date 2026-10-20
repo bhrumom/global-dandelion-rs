@@ -1,8 +1,10 @@
-//! Narrow, unprivileged Linux capabilities. No commands, shell, clock mutation,
-//! root requirement, or unsafe blocks. Secure source opens require Linux 5.6+.
+//! Unprivileged native source capabilities. Linux retains openat2; Apple resolves
+//! components through held directory handles. No shell, elevation or unsafe Rust.
 use dandelion_core::filesystem::{FileStamp, SourceAccess, SourceFile, SourceRoot};
 use dandelion_core::{Error, Result};
-use rustix::fs::{Mode, OFlags, ResolveFlags};
+#[cfg(target_os = "linux")]
+use rustix::fs::ResolveFlags;
+use rustix::fs::{Mode, OFlags};
 use serde::Serialize;
 use std::{fs::File, path::Path};
 use std::{
@@ -10,9 +12,11 @@ use std::{
     os::unix::fs::MetadataExt,
 };
 
-/// Unprivileged Linux implementation of the source-access port.
-pub struct LinuxSourceAccess;
-impl SourceAccess for LinuxSourceAccess {
+/// Platform implementation injected by the composition root.
+pub struct NativeSourceAccess;
+/// Compatibility for existing Linux consumers; no second implementation.
+pub use NativeSourceAccess as LinuxSourceAccess;
+impl SourceAccess for NativeSourceAccess {
     type Root = SourceDirectory;
     fn open_root(&self, path: &Path) -> Result<Self::Root> {
         SourceDirectory::open(path)
@@ -69,6 +73,7 @@ impl SourceDirectory {
     }
     /// The kernel resolves every component beneath the already-open root.
     /// Directory rename and symlink substitution cannot escape that root.
+    #[cfg(target_os = "linux")]
     pub fn open_regular(&self, relative: &Path) -> Result<File> {
         let fd = rustix::fs::openat2(
             &self.directory,
@@ -86,6 +91,48 @@ impl SourceDirectory {
             return Err(Error::Scan("source is not a regular file".into()));
         }
         Ok(file)
+    }
+
+    /// Apple has no openat2. Resolve one normal component at a time through
+    /// directory handles, rejecting symlinks and cross-device opens at each step.
+    #[cfg(target_vendor = "apple")]
+    pub fn open_regular(&self, relative: &Path) -> Result<File> {
+        use std::path::Component;
+        let mut components = relative.components().peekable();
+        let device = self.directory.metadata()?.dev();
+        let mut parent = self.directory.try_clone()?;
+        let mut depth = 0;
+        while let Some(component) = components.next() {
+            depth += 1;
+            let Component::Normal(name) = component else {
+                return Err(Error::Scan(
+                    "source path must contain only normal relative components".into(),
+                ));
+            };
+            if depth > 64 {
+                return Err(Error::Scan("source path exceeds depth limit".into()));
+            }
+            let last = components.peek().is_none();
+            let mut flags = OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK;
+            if !last {
+                flags |= OFlags::DIRECTORY;
+            }
+            let file = File::from(
+                rustix::fs::openat(&parent, name, flags, Mode::empty())
+                    .map_err(std::io::Error::from)?,
+            );
+            let metadata = file.metadata()?;
+            if metadata.dev() != device || (last && !metadata.is_file()) {
+                return Err(Error::Scan(
+                    "source is not a regular file on the selected device".into(),
+                ));
+            }
+            if last {
+                return Ok(file);
+            }
+            parent = file;
+        }
+        Err(Error::Scan("source path is empty".into()))
     }
 }
 
@@ -152,6 +199,49 @@ mod tests {
         assert!(root.open_regular(Path::new("../etc/passwd")).is_err());
         assert!(root.open_regular(Path::new("/etc/passwd")).is_err());
         assert!(root.open_regular(Path::new(".")).is_err());
+    }
+
+    #[test]
+    fn held_root_survives_rename_and_rejects_nested_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let selected = dir.path().join("selected");
+        std::fs::create_dir(&selected).unwrap();
+        std::fs::create_dir(selected.join("child")).unwrap();
+        std::fs::write(selected.join("child/data"), b"selected").unwrap();
+        std::os::unix::fs::symlink("child", selected.join("redirect")).unwrap();
+        let root = SourceDirectory::open(&selected).unwrap();
+        assert!(root.open_regular(Path::new("redirect/data")).is_err());
+        std::fs::rename(&selected, dir.path().join("moved")).unwrap();
+        std::fs::create_dir(&selected).unwrap();
+        std::fs::create_dir(selected.join("child")).unwrap();
+        std::fs::write(selected.join("child/data"), b"replacement").unwrap();
+        let mut bytes = Vec::new();
+        root.open_regular(Path::new("child/data"))
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        assert_eq!(bytes, b"selected");
+    }
+
+    #[test]
+    fn special_files_are_rejected_without_blocking_and_handle_stamps_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("fifo");
+        assert!(
+            std::process::Command::new("/usr/bin/mkfifo")
+                .arg(&fifo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let root = SourceDirectory::open(dir.path()).unwrap();
+        assert!(root.open_regular(Path::new("fifo")).is_err());
+        let path = dir.path().join("data");
+        std::fs::write(&path, b"before").unwrap();
+        let file = root.open_file(Path::new("data")).unwrap();
+        let before = file.stamp().unwrap();
+        std::fs::write(&path, b"after-mutation").unwrap();
+        assert_ne!(before, file.stamp().unwrap());
     }
 }
 

@@ -4,11 +4,15 @@ use serde::Serialize;
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    fs::{self, File},
+    fs::File,
     io::Read,
     net::Ipv4Addr,
     os::unix::ffi::OsStringExt,
     path::{Path, PathBuf},
+};
+#[cfg(target_os = "linux")]
+use std::{
+    fs,
     time::{SystemTime, UNIX_EPOCH},
 };
 const MAX_TABLE: u64 = 16 * 1024 * 1024;
@@ -135,8 +139,16 @@ pub fn parse_mountinfo(text: &str) -> Result<Vec<Mount>> {
     }
     Ok(mounts)
 }
+#[cfg(target_os = "linux")]
 pub fn mounts() -> Result<Vec<Mount>> {
     parse_mountinfo(&bounded_text(Path::new("/proc/self/mountinfo"), MAX_TABLE)?)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn mounts() -> Result<Vec<Mount>> {
+    Err(Error::Platform(
+        "Linux mount generation inventory is unavailable on this OS".into(),
+    ))
 }
 
 /// Return the exact visible Linux mount identity covering a canonical source root.
@@ -264,6 +276,7 @@ pub fn parse_arp(text: &str) -> Result<Vec<Neighbour>> {
     }
     Ok(rows)
 }
+#[cfg(target_os = "linux")]
 pub fn observe() -> Result<Observation> {
     let mut warnings = Vec::new();
     let mounts = mounts()?;
@@ -322,6 +335,12 @@ pub fn observe() -> Result<Observation> {
         neighbours_ipv4,
         warnings,
     })
+}
+#[cfg(not(target_os = "linux"))]
+pub fn observe() -> Result<Observation> {
+    Err(Error::Platform(
+        "Linux proc/sys inventory is unavailable on this OS".into(),
+    ))
 }
 #[cfg(test)]
 mod tests {

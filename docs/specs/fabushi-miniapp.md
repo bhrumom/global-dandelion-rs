@@ -49,6 +49,7 @@ No second Registry, native runtime, shell bridge or raw CDP/filesystem grant.
 | GD-M11 | Owner selected dual open-source distribution on 2026-10-19: `MIT OR Apache-2.0`, both texts shipped in the package; preserve third-party notices. |
 | GD-M12 | Package bytes may be hosted off-registry (GitHub Releases). The signed release payload then carries the download `url`; the host accepts only allowlisted https hosts, verifies sha256/size after download, and treats a digest mismatch as failure rather than falling back. |
 | GD-M13 | The signed Marketplace descriptor must declare `runtime.installMode=fabapp` and the same app/publisher identity as the package. A descriptor without this field is not installable on Desktop and must be rejected by release preparation before signing. |
+| GD-M14 | Host UI consumes real scanner fields (`regular_files`, `total_file_bytes`, `files_completed`, `verified_payload_bytes`). Send and receive share one visible operation lifecycle/status/cancel controller. Every implemented tool has an actionable entry, including state import, effective-config check, platform watch, hotspot status, update staging, country lookup and link recovery. No raw host path input is added to the page. Native panels remain capability-gated. |
 
 Proposed identity org.fabushi.global-dandelion, publisher bhrumom,
 next corrective release 0.2.1, platforms desktop/ios/android, minHostApi 1, runtime web,

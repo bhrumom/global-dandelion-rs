@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import platform
 import subprocess
 import tempfile
 import time
@@ -20,7 +19,9 @@ with tempfile.TemporaryDirectory(prefix="dandelion-update-test-") as d:
     der=openssl("pkey","-in",str(key),"-pubout","-outform","DER").stdout
     assert der[:12].hex()=="302a300506032b6570032100" and len(der)==44
     pub.write_bytes(der[12:]);artifact.write_bytes(b"synthetic release artifact, never executed")
-    data={"schema_version":1,"version":"0.2.0","target":platform.machine()+"-unknown-linux-gnu","size":artifact.stat().st_size,"sha256":hashlib.sha256(artifact.read_bytes()).hexdigest(),"expires_unix_seconds":int(time.time())+3600,"artifact_url":None}
+    doctor=subprocess.run([binary,"doctor","--json"],capture_output=True,text=True,env=env,check=True,timeout=10)
+    target=json.loads(doctor.stdout)["target"]
+    data={"schema_version":1,"version":"0.2.0","target":target,"size":artifact.stat().st_size,"sha256":hashlib.sha256(artifact.read_bytes()).hexdigest(),"expires_unix_seconds":int(time.time())+3600,"artifact_url":None}
     manifest.write_text(json.dumps(data,separators=(",",":")))
     openssl("pkeyutl","-sign","-rawin","-inkey",str(key),"-in",str(manifest),"-out",str(sig))
     trust=["--manifest",str(manifest),"--signature",str(sig),"--public-key",str(pub)]

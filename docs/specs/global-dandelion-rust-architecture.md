@@ -96,7 +96,7 @@ crates/
   dandelion-pacing/          token bucket and schedule policy
   dandelion-transport/       owned sockets, authorization, verified delivery
   dandelion-state/           versioned durable state; no UI/transport ownership
-  dandelion-platform-linux/  filesystem/mount/interface/process capabilities
+  dandelion-platform-linux/  filesystem/mount/interface/process capabilities; Apple source adapter
   dandelion-tui/             optional observer over core snapshots; never owns transfer state
   dandelion-hotspot/         isolated lifecycle capability
   dandelion-updater/         trust verification and staging only
@@ -175,6 +175,12 @@ network/root. Handle broken stdout only at output boundaries, not as transport
 success. Document all exit codes and behavior under scheduler/service execution.
 
 ## 9. Source safety and drive lifecycle
+
+Apple composition extends this contract under `docs/specs/native-apple-core.md`.
+Linux continues to require openat2 with no weaker fallback. Apple uses held-directory,
+component-wise openat/NOFOLLOW with regular-file and device identity checks. Linux
+mount generation, proc/sys inventory and NetworkManager are not Apple capabilities;
+their missing native equivalents remain full-parity gaps.
 
 Explicit trusted source roots. Rooted handle-based opens with no symlink/magic-link
 escape, mount crossing or special-device/FIFO reads. Use Linux openat2 fail-closed;
