@@ -114,3 +114,13 @@ arbitrary Internet IPs. Actions verify continuous cancellation, pacing, watch
 arguments, bounded long-stream retention, removed legacy DOM and mobile layout.
 0.4.2 retains package ownership and grants. 0.4.1 is immutable; signing/catalog
 and installed proof remain independent gates.
+
+GC11 (0.4.3, installed Mac observation): the existing Host unconditionally
+disables GPU acceleration, so actual 0.4.2 WebGL creation fails despite Actions
+WebGL passing. Keep the Host unchanged. Provide package-owned Canvas2D software
+projection of the same Rust-generated 3D sphere, route and ripple coordinates.
+Bound geometry/DPR/resolution, cap active frames to 15 fps, pause when hidden,
+respect reduced motion, retain pointer/keyboard rotation and receipt-driven
+overlays. No textures/CDN/network or fake receipt animation. Test real Canvas2D
+with WebGL unavailable, pixels, rotation and lifecycle in Actions, then confirm
+the installed Mac separately. Preserve immutable 0.4.2 and existing native grants.
