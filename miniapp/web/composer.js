@@ -198,6 +198,13 @@ export async function mountComposer(rust, host) {
       operation = null;
       if (state.state !== 'complete') throw new Error(state.state === 'cancelled' ? '传输已停止。' : `传输失败：${String(state.error ?? '未知原因')}`);
       const receipt = state.result ?? {};
+      if (receipt.status === 'budget_exhausted') {
+        report = { schemaVersion: 1, mode: mode(), status: 'budget_exhausted', source: 'installed-rust-engine', receipt };
+        $('composer-bytes').textContent = formatBytes(Number(receipt.verified_payload_bytes ?? 0));
+        $('composer-packets').textContent = String(receipt.chunks_sent ?? 0);
+        globe.update({ active: false, confirmed: false });
+        status('授权流量预算已用尽，已停止循环；请核对配置后再运行。'); return;
+      }
       report = { schemaVersion: 1, mode: mode(), status: 'complete', source: 'installed-rust-engine', receipt };
       $('composer-bytes').textContent = formatBytes(Number(receipt.verified_payload_bytes ?? 0)); $('composer-packets').textContent = String(receipt.chunks_sent ?? 0); $('composer-progress').value = 1;
       $('composer-pass').textContent = repeats === null ? '∞' : '1';
