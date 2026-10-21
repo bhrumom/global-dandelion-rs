@@ -65,6 +65,7 @@ export interface MiniAppToolBackend {
   readState(): Promise<unknown>;
   pick(mode: "files" | "directory", limits: { readonly maxFiles: number; readonly maxBytes: number }): Promise<{ readonly selectionId: string; readonly entries: MiniAppSelectionEntry[] } | null>;
   release(selectionId: string): Promise<void>;
+  compose?(text: string, selectionId?: string): Promise<{ readonly selectionId: string; readonly entries: MiniAppSelectionEntry[] }>;
   send(config: MiniAppTransferSendConfig): Promise<{ readonly operationId: string }>;
   receive?(config: MiniAppReceiveConfig): Promise<{ readonly operationId: string }>;
   status(operationId: string): Promise<unknown>;
@@ -78,7 +79,7 @@ export interface MiniAppToolBackend {
   diagnostics?(action: "selfTest" | "doctor" | "status"): Promise<unknown>;
   compat?(action: "packetInspect" | "countryLookup" | "linkExercise" | "linkRecover", args: Record<string, unknown>): Promise<unknown>;
   /** Fences and cancels native work when account/window ownership changes. */
-  cancelAll?(): void;
+  cancelAll?(): void | Promise<void>;
 }
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -135,6 +136,10 @@ function handlersFor(backend: MiniAppToolBackend): Map<string, { capability: Min
       const mode = args.mode === "directory" ? "directory" : "files";
       const picked = await backend.pick(mode, optionalLimits(args));
       return picked ? { ok: true, data: picked } : fail("SELECTION_CANCELLED", "用户取消了选择");
+    }],
+    ["selection.compose", MINIAPP_CAPABILITY.SELECTION, false, async (args) => {
+      if (!backend.compose || typeof args.text !== "string" || !args.text || args.text.length > 16384) throw new TypeError("MESSAGE_LIMIT");
+      return { ok: true, data: await backend.compose(args.text, args.selectionId === undefined ? undefined : requiredId(args, "selectionId")) };
     }],
     ["selection.release", MINIAPP_CAPABILITY.SELECTION, false, async (args) => {
       await backend.release(requiredId(args, "selectionId"));

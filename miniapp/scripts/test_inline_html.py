@@ -34,6 +34,8 @@ def build(root: Path) -> Path:
     (root / "wasm-bytes.js").write_text("export const wasmBytes = new Uint8Array([0]);\n", encoding="utf-8")
     (root / "pkg" / "dandelion_web_adapter.js").write_text("export const encode_packet = () => {};\n",
                                                            encoding="utf-8")
+    for module in ["composer.js", "globe.js"]:
+        (root / module).write_text("export const stub = true;", encoding="utf-8")
     target = root.parent / "inline.html"
     inline_html(root, target)
     return target
@@ -58,7 +60,7 @@ def check(html: str) -> None:
 def check_real_sources() -> None:
     """Every relative import in the shipped page must have a declared rewrite."""
     web = Path(__file__).resolve().parents[1] / "web"
-    for name in ("app.js", "host-tools.js"):
+    for name in ("app.js", "host-tools.js", "composer.js", "globe.js"):
         source = (web / name).read_text(encoding="utf-8")
         specifiers = set(re.findall(r"from\s+'(\./[^']*)'", source))
         unknown = specifiers - set(INLINE_REWRITES)
@@ -71,7 +73,7 @@ def main() -> None:
         root = Path(tmp) / "resources"
         target = build(root)
         check(target.read_text(encoding="utf-8"))
-        print(f"inline bundle ok: {target.stat().st_size} bytes, 3 modules inlined")
+        print(f"inline bundle ok: {target.stat().st_size} bytes, 5 modules inlined")
 
 
 if __name__ == "__main__":

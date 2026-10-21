@@ -57,6 +57,7 @@ jobs:
       - name: Runnable CLI and process acceptance
         run: |
           cargo build --locked -p dandelion-app
+          python3 miniapp/scripts/test_mode_cli.py --binary target/debug/dandelion
           python3 scripts/acceptance.py --binary target/debug/dandelion > acceptance-${{ matrix.target }}.json
           cat acceptance-${{ matrix.target }}.json
           python3 scripts/tls_acceptance.py --binary target/debug/dandelion > tls-acceptance-${{ matrix.target }}.json

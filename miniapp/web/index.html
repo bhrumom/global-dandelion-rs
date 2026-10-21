@@ -9,8 +9,24 @@
 </head>
 <body>
   <main>
-    <header><div class="mark" aria-hidden="true">✳</div><div><p class="eyebrow">FABUSHI MINI APP</p><h1>Global Dandelion</h1><p class="subtitle">文件分块、完整性校验与受控传输</p></div><span class="badge" id="host-badge">本地运行</span></header>
-    <section class="intro"><h2>让每一块数据，都有据可查。</h2><p>选择文件进行本地分块与逐包校验。目录扫描、传输、状态和诊断由已连接的宿主提供；只有你明确确认传输时，宿主才向授权目标发送数据。</p></section>
+    <header class="globe-header"><div class="brand-orbit" aria-hidden="true">✳</div><div><p class="eyebrow">GLOBAL DANDELION</p><h1>全球法布施</h1></div><span class="badge" id="host-badge">本地运行</span><a href="#advanced-workbench" class="tools-link">工具与报告 ↗</a></header>
+    <section class="earth-stage" aria-label="三维地球与运行状态">
+      <p class="earth-caption">让善意流转 · 让每一块数据有据可查</p>
+      <div class="earth-halo"><canvas id="earth" width="800" height="650" tabindex="0" role="img" aria-label="3D 地球，可拖动或用方向键旋转"></canvas></div>
+      <p id="earth-fallback" role="status" hidden></p>
+      <div class="earth-readout"><span class="live-dot"></span><span id="globe-state" role="status" aria-live="polite">正在加载 Rust 地球…</span></div>
+      <p id="location-summary" class="location-summary">所在点未设置 · 拖动地球旋转</p>
+    </section>
+    <section class="composer-panel" aria-label="法布施发送面板">
+      <div class="composer-options"><label>模式 <select id="mode" aria-label="模式"><option value="local">本地转轮</option><option value="global">全球发送</option><option value="hotspot">热点场能</option></select></label><label>循环 <select id="cycles" aria-label="循环"><option value="1">1 次</option><option value="3">3 次</option><option value="10">10 次</option><option value="100">100 次</option><option value="10000">持续 · 最多 10000 次</option></select></label><span id="engine-indicator">RUST · GDAN v2</span></div>
+      <div class="composer-box"><button id="attach" class="attach" aria-label="添加文件" title="添加文件">＋</button><textarea id="message" rows="2" maxlength="16384" placeholder="输入文字，或点击 ＋ 添加文件…" aria-label="输入文字"></textarea><button id="launch" class="launch" aria-label="开始运行" disabled>↑</button><button id="stop-composer" class="stop-composer" aria-label="停止运行" hidden>■</button><input type="file" id="composer-files" multiple hidden></div>
+      <div class="composer-bottom"><span id="composer-selection">尚未添加文件</span><button id="clear-composer" class="text-button">清空</button></div>
+      <ul id="composer-file-list" aria-label="待处理文件"></ul><p id="mode-description">本地转轮：在本机用 Rust 完成 GDAN 编码与解码回环，不发送网络数据。</p>
+      <p id="composer-status" role="status" aria-live="polite">等待 Rust 内核…</p><progress id="composer-progress" max="1" value="0" aria-label="运行进度"></progress>
+      <div class="composer-metrics"><span>循环 <strong id="composer-pass">0 / 1</strong></span><span>已校验 <strong id="composer-bytes">0 B</strong></span><span>数据包 <strong id="composer-packets">0</strong></span><button id="composer-export" class="text-button" disabled>导出报告 ↗</button></div>
+      <details class="route-settings"><summary>位置与授权目标</summary><p>坐标只用于地图显示，不授予发送权限；未设置真实端点时不绘制虚构轨迹。</p><div class="coordinate-fields"><label>所在纬度<input id="origin-lat" type="number" min="-90" max="90" step="any" placeholder="-90…90"></label><label>所在经度<input id="origin-lon" type="number" min="-180" max="180" step="any" placeholder="-180…180"></label><button id="set-origin" class="secondary">设置所在点</button><button id="locate" class="secondary">使用设备位置</button><label>授权目标<select id="composer-target" aria-label="授权目标"></select></label><label>目标纬度<input id="destination-lat" type="number" min="-90" max="90" step="any" placeholder="-90…90"></label><label>目标经度<input id="destination-lon" type="number" min="-180" max="180" step="any" placeholder="-180…180"></label></div><p id="route-status" role="status"></p></details>
+    </section>
+    <details id="advanced-workbench" class="advanced-workbench"><summary>高级工具、原生传输与校验报告</summary>
     <section class="workspace" aria-label="离线工作台">
       <div class="card"><div class="section-head"><h2>01 · 选择文件</h2><span>最多 128 个 · 合计 1 GiB</span></div>
         <label class="file-picker" for="files"><strong>＋ 选择本地文件</strong><span>读取只在你点击开始后进行</span><input id="files" type="file" multiple aria-label="选择本地文件"></label>
@@ -23,8 +39,8 @@
       </div>
     </section>
     <section class="card feature" data-feature="transfer" hidden>
-      <div class="section-head"><h2>04 · 受控传输</h2><span>由宿主执行</span></div>
-      <p>文件与目标句柄都由宿主持有，页面只传标识。本机回环只验证本机数据；远程传输使用双向 TLS，目标须已在宿主授权池内。</p>
+      <div class="section-head"><h2>04 · 受控传输</h2><span>随安装包提供</span></div>
+      <p>文件与目标句柄都由小程序原生层持有，页面只传标识。本机回环只验证本机数据；远程传输使用双向 TLS，目标须已在宿主授权池内。</p>
       <div class="actions"><button id="pick-transfer" class="secondary">选择待发送目录</button><select id="target-pool" aria-label="授权目标池"></select><label class="setting">运行次数 <input id="transfer-repeat" type="number" min="1" max="10000" value="1"></label><label class="setting"><input id="transfer-watch" type="checkbox"> 持续运行</label><label class="setting"><input id="transfer-resume" type="checkbox"> 断点恢复</label><label class="setting"><input id="receive-once" type="checkbox" checked> 接收一次</label><button id="send">开始传输</button><button id="receive" class="secondary">开始接收</button><button id="cancel-transfer" class="secondary" disabled>停止</button></div>
       <p id="transfer-status" role="status" aria-live="polite">尚未开始。</p>
     </section>
@@ -68,7 +84,8 @@
       <p id="hotspot-status" role="status" aria-live="polite">未应用热点配置。</p>
     </section>
     <section class="card"><div class="section-head"><h2>07 · 本次结果</h2><button id="export" class="secondary" disabled>导出报告</button></div><div class="stats"><div><span>完整校验文件</span><strong id="file-count">0</strong></div><div><span>完整校验包</span><strong id="packet-count">0</strong></div><div><span>本地校验字节</span><strong id="byte-count">0 B</strong></div></div><ul id="results" aria-label="文件结果"></ul><p class="note">报告包含你选择的文件名和汇总数，不包含文件内容。刷新或关闭会清除本次选择和结果。</p></section>
-    <details class="card"><summary>能力、数据与来源</summary><p>离线资源包：HTML / CSS / JavaScript / Rust WebAssembly。来源为同仓库 PR #1 的 dandelion-core 和 dandelion-packet。</p><p>本页面自身不发起网络请求，也不直接访问文件系统。传输、扫描与热点由宿主通过声明式工具执行；宿主未提供的能力会整块隐藏，不会降级为隐式权限。</p><p>文件与结果只保存在当前页面内存。显示偏好可以保存在当前小程序的 Web 存储中；宿主必须提供账号与小程序隔离。</p><label class="setting"><input id="remember" type="checkbox">记住显示偏好</label><button id="clear" class="secondary">删除已保存的显示偏好</button><p id="storage-status" role="status"></p><p>版本 __FABUSHI_APP_VERSION__ · MIT OR Apache-2.0。依赖许可证随发行包提供。</p></details>
+    <details class="card"><summary>能力、数据与来源</summary><p>离线资源包：HTML / CSS / JavaScript / Rust WebAssembly。来源为同仓库 PR #1 的 dandelion-core 和 dandelion-packet。</p><p>本页面自身不发起网络请求，也不直接访问文件系统。传输、扫描与热点由已安装小程序的原生实现执行，宿主只提供通用权限与生命周期管理；宿主未提供的能力会整块隐藏，不会降级为隐式权限。</p><p>文件与结果只保存在当前页面内存。显示偏好可以保存在当前小程序的 Web 存储中；宿主必须提供账号与小程序隔离。</p><label class="setting"><input id="remember" type="checkbox">记住显示偏好</label><button id="clear" class="secondary">删除已保存的显示偏好</button><p id="storage-status" role="status"></p><p>版本 __FABUSHI_APP_VERSION__ · MIT OR Apache-2.0。依赖许可证随发行包提供。</p></details>
+    </details>
     <footer>你的文件，你的选择。离线校验在本地完成，传输只到授权目标。</footer>
   </main>
   <script type="module" src="app.js"></script>

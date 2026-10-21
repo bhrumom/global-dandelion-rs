@@ -43,6 +43,7 @@ jobs:
           native-built/dandelion.bin --config native-built/default.toml self-test --json
       - name: Exercise package-owned runtime and real Rust engine
         run: |
+          python3 miniapp/scripts/test_mode_cli.py --binary native-built/dandelion.bin
           node miniapp/scripts/test_native_worker.cjs native-built
           python3 miniapp/scripts/test_native_tls.py native-built
       - name: Build same-revision offline Wasm resources
@@ -54,7 +55,7 @@ jobs:
       - name: Prepare native-capability package
         run: |
           python3 scripts/disk_guard.py --path . --planned-bytes 67108864
-          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --version 0.4.0 --platforms desktop --native-dir native-built --output global-dandelion-UNSIGNED.zip
+          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --version 0.4.1 --platforms desktop --native-dir native-built --output global-dandelion-UNSIGNED.zip
           python3 -m venv "$RUNNER_TEMP/native-package-python"
           "$RUNNER_TEMP/native-package-python/bin/pip" install cryptography==46.0.3
           "$RUNNER_TEMP/native-package-python/bin/python" miniapp/scripts/test_package.py miniapp-resources

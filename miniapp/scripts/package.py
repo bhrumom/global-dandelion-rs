@@ -20,6 +20,8 @@ INLINE_REWRITES = {
     "./pkg/dandelion_web_adapter.js": "fabushi-adapter",
     "./wasm-bytes.js": "fabushi-wasm-bytes",
     "./host-tools.js": "fabushi-host-tools",
+    "./composer.js": "fabushi-composer",
+    "./globe.js": "fabushi-globe",
 }
 INLINE_CSP = (
     "default-src 'none'; script-src 'unsafe-inline' data: 'wasm-unsafe-eval'; "
@@ -68,8 +70,8 @@ def prepare(pkg, output, source_commit, version, platforms, native_dir=None):
         "network-transfer=host-mediated\n", encoding="utf-8")
     files = {}
     if native_dir is not None:
-        if platforms != ['desktop'] or version != '0.4.0':
-            raise ValueError('native package requires reviewed Mac-only 0.4.0 release')
+        if platforms != ['desktop'] or version not in ('0.4.0', '0.4.1'):
+            raise ValueError('native package requires reviewed Mac-only 0.4.0/0.4.1 release')
         (output / 'native').mkdir()
         info = output / 'BUILD-INFO.txt'
         info.write_text(info.read_text().replace('kind=offline-web-preview', 'kind=install-owned-native-macos'), encoding='utf-8')
@@ -125,6 +127,12 @@ def inline_html(resources, destination):
         "fabushi-wasm-bytes": (resources / "wasm-bytes.js").read_text(encoding="utf-8"),
         "fabushi-host-tools": (resources / "host-tools.js").read_text(encoding="utf-8"),
     }
+    # Module dependencies are rewritten before inlining, including nested imports.
+    for filename, module in [('globe.js', 'fabushi-globe'), ('composer.js', 'fabushi-composer')]:
+        source = (resources / filename).read_text(encoding='utf-8')
+        for old, new in INLINE_REWRITES.items():
+            source = source.replace(f"'{old}'", f"'{new}'").replace(f'"{old}"', f'"{new}"')
+        modules[module] = source
     imports = {name: "data:text/javascript;base64," + base64.b64encode(src.encode("utf-8")).decode("ascii")
                for name, src in modules.items()}
     html = html.replace('<link rel="stylesheet" href="app.css">', f"<style>{css}</style>")

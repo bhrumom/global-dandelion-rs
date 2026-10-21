@@ -2,6 +2,8 @@
 //! No sockets, host paths, lifecycle authority or native privileges are exposed.
 use dandelion_core::{Chunk, MAX_DATAGRAM_BYTES, MAX_PAYLOAD_BYTES};
 use wasm_bindgen::prelude::*;
+mod globe;
+pub use globe::{globe_mesh, globe_ripple, globe_route};
 
 #[wasm_bindgen]
 pub fn max_payload_bytes() -> u32 {

@@ -31,6 +31,7 @@ export const TOOLS = Object.freeze({
   'offline.capabilities': { capability: CAPABILITIES.OFFLINE, mutating: false },
   'offline.state.read': { capability: CAPABILITIES.OFFLINE, mutating: false },
   'selection.pick': { capability: CAPABILITIES.SELECTION, mutating: false },
+  'selection.compose': { capability: CAPABILITIES.SELECTION, mutating: false },
   'selection.release': { capability: CAPABILITIES.SELECTION, mutating: false },
   'transfer.send': { capability: CAPABILITIES.TRANSFER, mutating: true },
   'transfer.receive': { capability: CAPABILITIES.TRANSFER, mutating: true },

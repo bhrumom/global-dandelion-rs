@@ -118,7 +118,7 @@ connect_attempts = 3
 [[transport.tls.peers]]
 address = "{address}"
 server_name = "localhost"
-class = "private"
+class = "lan"
 authorized = true
 ''')
             worker = Worker(root / (identity + '-private'), config, source)
@@ -149,7 +149,7 @@ authorized = true
         else:
             raise AssertionError(('native receiver never reported real readiness', state))
         selection = sender.call('selection.pick', {'mode': 'directory'})['selectionId']
-        outgoing = sender.call('transfer.send', {'selectionId': selection, 'targetPoolId': 'configured'})['operationId']
+        outgoing = sender.call('transfer.send', {'selectionId': selection, 'targetPoolId': 'lan'})['operationId']
         for worker, identifier in [(sender, outgoing), (receiver, operation)]:
             for attempt in range(30):
                 status = worker.call('transfer.status', {'operationId': identifier})

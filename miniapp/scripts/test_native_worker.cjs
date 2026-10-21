@@ -1,7 +1,7 @@
 // Actions-only protocol/real-engine fixture. Not an installed Host/picker claim.
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
-const { mkdtemp, readFile, writeFile, rm } = require('node:fs/promises');
+const { mkdtemp, readFile, writeFile, rm, readdir, symlink } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -66,6 +66,22 @@ const { randomUUID } = require('node:crypto');
     assert.equal((await call('scan.read', { rootId: '/etc' })).ok, false);
     assert.equal((await call('selection.release', { selectionId: selected.data.selectionId })).ok, true);
     assert.equal((await call('scan.read', { rootId: selected.data.selectionId })).ok, false);
+    await writeFile(path.join(fixture, 'not-selected.txt'), 'this sibling must never be sent');
+    pickFiles.push(path.join(fixture, 'payload.txt'));
+    const individual = await call('selection.pick', { mode: 'files' }); assert.equal(individual.ok, true);
+    assert.equal(individual.data.entries[0].size, Buffer.byteLength('actual native payload'));
+    const exact = await call('scan.read', { rootId: individual.data.selectionId });
+    assert.equal(exact.data.files_completed, 1); assert.equal(exact.data.verified_payload_bytes, Buffer.byteLength('actual native payload'));
+    const composed = await call('selection.compose', { selectionId: individual.data.selectionId, text: 'hello Rust' }); assert.equal(composed.ok, true);
+    const textSend = await call('transfer.send', { selectionId: composed.data.selectionId, targetPoolId: 'loopback', repeat: 2 }); assert.equal(textSend.ok, true);
+    await call('selection.release', { selectionId: composed.data.selectionId });
+    for (let i = 0; i < 30; i++) { status = await call('transfer.status', { operationId: textSend.data.operationId }); if (status.data.state !== 'running') break; await new Promise(resolve => setTimeout(resolve, 100)); }
+    assert.equal(status.data.state, 'complete'); assert.equal(status.data.result.verified_payload_bytes, 2 * (Buffer.byteLength('actual native payload') + Buffer.byteLength('hello Rust')));
+    await call('selection.release', { selectionId: individual.data.selectionId });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.deepEqual((await readdir(path.join(privateData, 'state'))).filter(name => name.startsWith('selection-')), []);
+    const alias = path.join(fixture, 'alias.txt'); await symlink(path.join(fixture, 'payload.txt'), alias);
+    pickFiles.push(alias); assert.equal((await call('selection.pick', { mode: 'files' })).ok, false);
     const time = await call('platform.time'); assert.equal(time.ok, true); assert.equal(time.data.system_clock_modified, false);
     const mounts = await call('platform.mounts'); assert.equal(mounts.ok, true); assert.equal(mounts.data.observationOnly, true);
     assert.equal((await call('config.import')).ok, true);
