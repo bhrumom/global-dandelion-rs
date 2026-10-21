@@ -20,3 +20,21 @@ The probe must execute only on a disposable macos-15 Actions runner, preserve di
 reserve, use a task-owned image/mountpoint and detach that exact image in finally.
 No physical device, user source, privileged global mount or production state is
 modified. Record raw observations even when the candidate identity fails.
+
+## FSEvents follow-up, 2026-10-21
+
+Actions39434309650 falsified statfs-only identity: all three APFS remounts returned
+the same fsid with unchanged file stamps. Next inspect per-device FSEvents history
+across independent processes: capture a cursor/daemon UUID, read an unchanged
+control, remount while no observer runs, then replay history. Record HistoryDone,
+Mount/Unmount/RootChanged, missing/coalesced/dropped history, cursor bounds and
+UUIDs. Bounded history replay is an experiment, not a production proof. Missing
+events, ambiguous history or stream failure must never be interpreted as an
+unchanged mount. The installed0.4.0 package and resume rejection remain unchanged.
+
+The native observation helper is test-only. It is compiled only on disposable
+Actions, returns bounded numeric metadata and UUIDs, never grants source access
+or accepts a synthetic proof from a WebView. Apple describes persistent streams
+as advisory, recommends per-device streams, and requires a rescan on dropped,
+wrapped or root-change events:
+https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html

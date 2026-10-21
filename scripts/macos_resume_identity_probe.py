@@ -17,6 +17,7 @@ image = root / "source.dmg"
 mount = root / "mounted"
 mount.mkdir()
 helper = root / "identity"
+events = root / "events"
 source = root / "identity.c"
 report = {"kind": "macos-mount-identity-experiment", "samples": []}
 attached = False
@@ -33,6 +34,8 @@ int main(int argc, char **argv) {
 }
 ''')
     command("/usr/bin/xcrun", "clang", "-Wall", "-Wextra", "-Werror", str(source), "-o", str(helper))
+    command("/usr/bin/xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-Wno-deprecated-declarations",
+            "-framework", "CoreServices", str(Path(__file__).with_name("macos_fsevents_probe.c")), "-o", str(events))
     report["bootSession"] = command("/usr/sbin/sysctl", "-n", "kern.bootsessionuuid").decode().strip()
     report["hostIdentity"] = json.loads(command(str(helper), str(root)))
     command("/usr/bin/hdiutil", "create", "-size", "128m", "-fs", "APFS", "-volname", "DandelionResumeProbe", str(image))
@@ -43,6 +46,11 @@ int main(int argc, char **argv) {
         if attempt == 0:
             file.write_bytes(b"unchanged across independent mounts\n")
             os.sync()
+            report["eventCursor"] = json.loads(command(str(events), str(file), "cursor"))
+            report["unchangedHistory"] = json.loads(command(str(events), str(file), str(report["eventCursor"]["cursor"])))
+        else:
+            snapshot_history = json.loads(command(str(events), str(file), str(report["eventCursor"]["cursor"])))
+            report.setdefault("remountedHistory", []).append(snapshot_history)
         stat = file.stat()
         info = plistlib.loads(command("/usr/sbin/diskutil", "info", "-plist", str(mount)))
         snapshot = {"attempt": attempt, "volumeUUID": info.get("VolumeUUID"),
