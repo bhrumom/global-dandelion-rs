@@ -3,13 +3,14 @@ export function createGlobe(canvas, rust, status) {
   const gl = canvas.getContext('webgl', { alpha: true, antialias: true, preserveDrawingBuffer: true });
   if (!gl) { status('此设备无法创建 3D 画布；文件与传输功能仍可使用。'); return { update() {}, destroy() {} }; }
   const vertex = `attribute vec3 position; attribute float land;
-    uniform vec2 rotation; uniform float aspect; varying vec3 normal; varying float terrain;
+    uniform vec2 rotation; uniform float aspect; varying vec3 normal; varying vec3 geography; varying float terrain;
     void main(){float a=rotation.x,b=rotation.y;vec3 p=vec3(cos(a)*position.x+sin(a)*position.z,position.y,-sin(a)*position.x+cos(a)*position.z);
-    p=vec3(p.x,cos(b)*p.y-sin(b)*p.z,sin(b)*p.y+cos(b)*p.z);normal=normalize(p);terrain=land;
+    p=vec3(p.x,cos(b)*p.y-sin(b)*p.z,sin(b)*p.y+cos(b)*p.z);normal=normalize(p);geography=normalize(position);terrain=land;
     float depth=3.5-p.z;gl_Position=vec4(p.x*2.65/aspect,p.y*2.65,1.0202*depth-.20202,depth);}`;
-  const fragment = `precision mediump float;varying vec3 normal;varying float terrain;uniform vec4 overlay;
+  const fragment = `precision mediump float;varying vec3 normal;varying vec3 geography;varying float terrain;uniform vec4 overlay;
     void main(){if(overlay.a>0.){gl_FragColor=overlay;return;}float light=.28+.72*max(0.,dot(normal,normalize(vec3(-.8,.7,1.2))));
     vec3 ocean=vec3(.018,.105,.15),land=vec3(.16,.48,.43);vec3 color=mix(ocean,land,smoothstep(.3,.65,terrain))*light;
+    vec3 g=normalize(geography);float grid=1.-smoothstep(.0,.025,min(abs(sin(atan(g.x,g.z)*12.)),abs(sin(asin(clamp(g.y,-1.,1.))*12.))));color=mix(color,vec3(.12,.34,.3),grid*.28);
     float rim=pow(1.-max(0.,normal.z),3.);color+=rim*vec3(.03,.32,.38);gl_FragColor=vec4(color,1.);}`;
   const shaders = [], buffers = [], events = new AbortController();
   const compile = (type, source) => {
@@ -24,7 +25,7 @@ export function createGlobe(canvas, rust, status) {
   gl.useProgram(program); gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   const position = gl.getAttribLocation(program, 'position'), land = gl.getAttribLocation(program, 'land');
   const rotation = gl.getUniformLocation(program, 'rotation'), aspect = gl.getUniformLocation(program, 'aspect'), overlay = gl.getUniformLocation(program, 'overlay');
-  const mesh = rust.globe_mesh(48, 96);
+  const mesh = rust.globe_mesh(64, 128);
   const buffer = () => { const value = gl.createBuffer(); buffers.push(value); return value; };
   const surface = buffer(), lines = buffer(); gl.bindBuffer(gl.ARRAY_BUFFER, surface); gl.bufferData(gl.ARRAY_BUFFER, mesh, gl.STATIC_DRAW);
   let pulseUntil = 0;
@@ -74,6 +75,7 @@ export function createGlobe(canvas, rust, status) {
   redraw();
   return {
     update(next) {
+      if (next.origin && (!operation.origin || next.origin.some((v, i) => v !== operation.origin[i]))) { yaw = -next.origin[1] * Math.PI / 180; pitch = next.origin[0] * Math.PI / 180; }
       if (next.confirmed === true) pulseUntil = performance.now() + 2400;
       if (next.confirmed === false) pulseUntil = 0;
       operation = { ...operation, ...next }; route = operation.mode === 'global' && (operation.active || operation.confirmed) && operation.origin && operation.destination ? rust.globe_route(...operation.origin, ...operation.destination, 96) : null;

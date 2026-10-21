@@ -256,9 +256,10 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
         let ui_cancel = cancel.child_token();
         let _ui_guard = ui_cancel.clone().drop_guard();
         let mut progress_rx = rx.clone();
-        let progress = options.progress_json.then(|| {
+        let mut progress_tasks = tokio::task::JoinSet::new();
+        if options.progress_json {
             let child = ui_cancel.clone();
-            tokio::spawn(async move {
+            progress_tasks.spawn(async move {
                 let mut timer = tokio::time::interval(Duration::from_secs(1));
                 for sample in 0..1800 {
                     tokio::select! {
@@ -280,19 +281,19 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
                     }
                 }
                 Ok::<(), Error>(())
-            })
-        });
+            });
+        }
         let ui = options.tui.then(|| {
             let child = ui_cancel.clone();
             tokio::task::spawn_blocking(move || dandelion_tui::observe(rx, child))
         });
         let output = service(config, options, cancel, tx, tls_config, runtime_checkpoints).await;
         ui_cancel.cancel();
-        if let Some(progress) = progress {
-            tokio::time::timeout(deadline, progress)
-                .await
-                .map_err(|_| Error::ShutdownTimeout)?
-                .map_err(|error| Error::Task(error.to_string()))??;
+        while let Some(progress) = tokio::time::timeout(deadline, progress_tasks.join_next())
+            .await
+            .map_err(|_| Error::ShutdownTimeout)?
+        {
+            progress.map_err(|error| Error::Task(error.to_string()))??;
         }
         if let Some(ui) = ui {
             tokio::time::timeout(deadline, ui)
