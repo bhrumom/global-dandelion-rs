@@ -118,7 +118,7 @@ connect_attempts = 3
 [[transport.tls.peers]]
 address = "{address}"
 server_name = "localhost"
-class = "private"
+class = "lan"
 authorized = true
 ''')
             worker = Worker(root / (identity + '-private'), config, source)

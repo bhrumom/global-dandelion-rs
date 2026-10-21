@@ -35,7 +35,8 @@ measurement of physical energy or proof of wireless radiation.
   protocol loopback; this fallback is not full mobile native parity. Finite repeats 1..10000, session byte budget, cooperative pacing,
   no overlapping work, cancellation generation fence and unload cleanup.
 - GC04: global sends only to configured authenticated targets through the installed
-  package. Hotspot uses configured LAN peers only, never creates/adopts public
+  package. Hotspot uses configured class=lan direct private-IP peers only (class=private
+  VPN/VPS peers are excluded), never creates/adopts public
   targets or silently enables WAN. Local mode must never inherit a remote TLS
   configuration. Native routing must enforce selected mode, not just its UI label.
 - GC05: + selects actual files (not their parent directory); do not widen grants.

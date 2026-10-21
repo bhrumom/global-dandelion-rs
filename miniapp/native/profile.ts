@@ -73,7 +73,7 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
       return { binaryPath, configPath, allowedRoots: [], authorizePickedRoots: true, stateDirectory,
         targetPools: [{ id: "loopback", label: "本机回环验证" },
           ...(remote ? [{ id: "configured", label: "已明确授权的 mTLS 目标" }] : []),
-          ...(remote && tls.peers.some(peer => ["lan", "private"].includes(peer.class)) ? [{ id: "lan", label: "已授权热点／局域网设备" }] : [])],
+          ...(remote && tls.peers.some(peer => peer.class === "lan") ? [{ id: "lan", label: "已授权热点／局域网设备" }] : [])],
         ...(remote ? { receive: { targetPoolId: "configured", caFile: tls.ca_file, certificateFile: tls.certificate_file, privateKeyFile: tls.private_key_file, bind: receiveBind, allowedClients: [...new Set(tls.peers.map(peer => peer.address.startsWith("[") ? peer.address.slice(1, peer.address.indexOf("]")) : peer.address.slice(0, peer.address.lastIndexOf(":"))))], timeoutMs: 60000 } } : {}),
       };
     },

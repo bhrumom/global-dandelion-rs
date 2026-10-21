@@ -21,7 +21,7 @@ wan_allowlist = ["8.8.8.8:2443"]
 [[transport.tls.peers]]
 address = "127.0.0.1:2443"
 server_name = "localhost"
-class = "private"
+class = "lan"
 authorized = true
 [[transport.tls.peers]]
 address = "8.8.8.8:2443"
@@ -40,7 +40,7 @@ authorized = true
     assert [p['address'] for p in tls['peers']] == ['127.0.0.1:2443']
     assert tls['wan_enabled'] is False and tls['wan_allowlist'] == [] and tls['target_pool'] == []
     assert call('--local-loopback', '--lan-only').returncode != 0
-    config.write_text(config.read_text().replace('class = "private"', 'class = "wan"'))
+    config.write_text(config.read_text().replace('class = "lan"', 'class = "private"'))
     assert call('--lan-only').returncode != 0
     source = Path(directory) / 'source'
     source.mkdir()

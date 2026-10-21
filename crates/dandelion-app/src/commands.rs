@@ -67,9 +67,7 @@ pub fn execute(cli: &Cli) -> Result<u8> {
                             std::net::IpAddr::V4(ip) => ip.is_private() || ip.is_loopback(),
                             std::net::IpAddr::V6(ip) => ip.is_unique_local() || ip.is_loopback(),
                         };
-                        private
-                            && peer.authorized
-                            && matches!(peer.class, NetworkClass::Lan | NetworkClass::Private)
+                        private && peer.authorized && matches!(peer.class, NetworkClass::Lan)
                     });
                     if scoped.transport.tls.peers.is_empty() {
                         return Err(Error::Config(
