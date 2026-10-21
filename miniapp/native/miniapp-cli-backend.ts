@@ -135,7 +135,7 @@ interface Operation {
   state: "running" | "complete" | "failed" | "cancelled";
   result?: unknown;
   error?: string;
-  mode: "single" | "receive";
+  mode: "single" | "receive" | "send";
 }
 
 export function createDandelionCliBackend(
@@ -227,11 +227,17 @@ export function createDandelionCliBackend(
     return run;
   };
 
-  const parseResult = (text: string, mode: "single" | "receive" | "watch" = "single"): unknown => {
+  const parseResult = (text: string, mode: "single" | "receive" | "send" | "watch" = "single"): unknown => {
     const trimmed = text.trim();
     try {
       if (mode === "single") return trimmed ? JSON.parse(trimmed) : {};
       const records: unknown[] = trimmed.split(/\r?\n/).map((line) => JSON.parse(line));
+      if (mode === "send") {
+        if (!records.length || records.length > 1801 || records.slice(0, -1).some(record => !record || typeof record !== "object" || Reflect.get(record, "event") !== "progress")) throw new Error();
+        const final = records.at(-1);
+        if (!final || typeof final !== "object" || Reflect.get(final, "schema_version") !== 1) throw new Error();
+        return final;
+      }
       if (mode === "watch") {
         if (records.length < 1 || records.length > 10_000) throw new Error();
         return { samples: records };
@@ -245,7 +251,7 @@ export function createDandelionCliBackend(
     } catch { throw new Error("DANDELION_INVALID_JSON"); }
   };
 
-  const finish = async (run: NativeRun, mode: "single" | "receive" | "watch" = "single"): Promise<unknown> => {
+  const finish = async (run: NativeRun, mode: "single" | "receive" | "send" | "watch" = "single"): Promise<unknown> => {
     let result;
     try { result = await run.result; }
     catch { throw new Error("DANDELION_PROCESS_FAILED"); }
@@ -281,7 +287,7 @@ export function createDandelionCliBackend(
     return finish(admit(argv), mode);
   };
 
-  const startOperation = (argv: readonly string[], mode: "single" | "receive"): { operationId: string } => {
+  const startOperation = (argv: readonly string[], mode: "single" | "receive" | "send"): { operationId: string } => {
     pruneOperations();
     if (operations.size >= MAX_OPERATIONS) throw new Error("NATIVE_OPERATION_LIMIT");
     const operationId = randomUUID();
@@ -400,12 +406,12 @@ export function createDandelionCliBackend(
       if (sendConfig.trafficLimitBytes !== undefined) argv.push("--traffic-limit-bytes", String(sendConfig.trafficLimitBytes));
       if (sendConfig.queueCapacity !== undefined) argv.push("--queue-capacity", String(sendConfig.queueCapacity));
       if (sendConfig.chunkBytes !== undefined) argv.push("--chunk-bytes", String(sendConfig.chunkBytes));
-      argv.push("--json");
+      argv.push("--progress-json", "--json");
       const record = selections.get(sendConfig.selectionId);
       if (!record) throw new Error("UNKNOWN_SELECTION");
       record.users = (record.users ?? 0) + 1;
       try {
-        const result = startOperation(argv, "single");
+        const result = startOperation(argv, "send");
         const release = () => { record.users!--; if (record.released && !record.users) void record.dispose?.().catch(() => {}); };
         void operations.get(result.operationId)!.run.handle.done.then(release, release);
         return result;
@@ -445,7 +451,15 @@ export function createDandelionCliBackend(
           if (first.event === "ready" && first.mutual_tls === true && typeof first.address === "string" && first.address.length <= 80) ready = { address: first.address, mutual_tls: true };
         } catch { /* readiness is not complete yet */ }
       }
-      return { state: operation.state, result: operation.result, error: operation.error, ready };
+      let progress: { sequence: number; pass_verified_payload_bytes: number; pass_chunks_sent: number } | undefined;
+      if (operation.mode === "send" && operation.run.handle.snapshot) {
+        const raw = operation.run.handle.snapshot(), end = raw.lastIndexOf("\n");
+        try {
+          const frame = JSON.parse(raw.slice(raw.lastIndexOf("\n", end - 1) + 1, end));
+          if (frame.event === "progress" && [frame.sequence, frame.pass_verified_payload_bytes, frame.pass_chunks_sent].every(value => Number.isSafeInteger(value) && value >= 0)) progress = { sequence: frame.sequence, pass_verified_payload_bytes: frame.pass_verified_payload_bytes, pass_chunks_sent: frame.pass_chunks_sent };
+        } catch { /* a partially written progress line is not evidence */ }
+      }
+      return { state: operation.state, result: operation.result, error: operation.error, ready, progress };
     },
     async cancel(operationId) {
       const operation = operations.get(operationId);

@@ -5,7 +5,7 @@ const $ = id => document.getElementById(id);
 const MAX_BYTES = 1024 ** 3, MAX_PACKETS = 1_000_000;
 export async function mountComposer(rust, host) {
   let pools = [], files = [], nativeSelection = null, nativeEntries = [], busy = false, epoch = 0, operation = null, origin = null, report = null, closed = false;
-  const globe = rust ? createGlobe($('earth'), rust, text => { $('globe-state').textContent = text; }) : { update() {}, destroy() {} };
+  const globe = rust ? createGlobe($('earth'), rust, text => { $('globe-state').textContent = text; $('earth-fallback').textContent = text; $('earth-fallback').hidden = false; }) : { update() {}, destroy() {} };
   const status = text => { if (!closed) $('composer-status').textContent = text; };
   const mode = () => $('mode').value;
   const nativeLocal = () => mode() === 'local' && host.capabilities.has('transfer') && pools.some(pool => pool.id === 'loopback');
@@ -145,23 +145,35 @@ export async function mountComposer(rust, host) {
     if (closed || ticket !== epoch) { await host.call('transfer.cancel', { operationId: id }); return; }
     operation = id;
     const destination = coordinates('destination-lat', 'destination-lon');
-    globe.update({ active: true, mode: mode(), origin, destination, confirmed: false });
+    globe.update({ active: false, mode: mode(), origin, destination, confirmed: false });
     $('globe-state').textContent = nativeLocal() ? '本机 UDP 回环 · Rust 校验中' : mode() === 'global' ? '发送进行中 · 等待实际接收校验' : '局域网发送中 · 场能波澜';
     status(origin && (mode() !== 'global' || destination) ? '传输已启动，轨迹表示运行过程，不代表已接收。' : '传输已启动；缺少端点坐标，暂不绘制地理轨迹。');
+    let lastSequence = -1, lastProgressAt = -Infinity;
     while (!closed && ticket === epoch) {
       const result = await host.call('transfer.status', { operationId: id });
       if (closed || ticket !== epoch) return;
       if (!result.ok) { await host.call('transfer.cancel', { operationId: id }); throw new Error(`无法核对进度，已请求停止：${result.error.message}`); }
       const state = result.data;
       if (!state || !['running', 'complete', 'failed', 'cancelled'].includes(state.state)) { await host.call('transfer.cancel', { operationId: id }); throw new Error('引擎返回未知状态，已请求停止。'); }
-      if (state.state === 'running') { await pause(500); continue; }
+      if (state.state === 'running') {
+        const progress = state.progress;
+        const verified = Number.isSafeInteger(progress?.pass_chunks_sent) && progress.pass_chunks_sent > 0;
+        if (verified && Number.isSafeInteger(progress.sequence) && progress.sequence > lastSequence) { lastSequence = progress.sequence; lastProgressAt = performance.now(); }
+        globe.update({ active: performance.now() - lastProgressAt < 2000 });
+        if (verified) {
+          $('composer-bytes').textContent = formatBytes(progress.pass_verified_payload_bytes);
+          $('composer-packets').textContent = String(progress.pass_chunks_sent);
+          status(`当前轮 Rust 已确认 ${progress.pass_chunks_sent} 包 · ${formatBytes(progress.pass_verified_payload_bytes)}；等待最终结果。`);
+        }
+        await pause(500); continue;
+      }
       operation = null;
       if (state.state !== 'complete') throw new Error(state.state === 'cancelled' ? '传输已停止。' : `传输失败：${String(state.error ?? '未知原因')}`);
       const receipt = state.result ?? {};
       report = { schemaVersion: 1, mode: mode(), status: 'complete', source: 'installed-rust-engine', receipt };
       $('composer-bytes').textContent = formatBytes(Number(receipt.verified_payload_bytes ?? 0)); $('composer-packets').textContent = String(receipt.chunks_sent ?? 0); $('composer-progress').value = 1;
       $('composer-pass').textContent = `${repeats} / ${repeats}`;
-      globe.update({ active: false, confirmed: Number(receipt.verified_payload_bytes ?? 0) > 0 });
+      globe.update({ active: false, confirmed: Number(receipt.chunks_sent ?? 0) > 0 });
       status(`引擎已完成，实际校验 ${formatBytes(Number(receipt.verified_payload_bytes ?? 0))}。`); return;
     }
   }
@@ -173,7 +185,7 @@ export async function mountComposer(rust, host) {
       if (currentMode === 'local' && !nativeLocal()) { globe.update({ active: true, mode: 'local', origin, confirmed: false }); $('globe-state').textContent = origin ? '本地回环 · 所在点波澜' : '本地回环 · 所在点未设置'; await localRun(ticket, repeats, $('message').value); }
       else await nativeRun(ticket, repeats, $('message').value);
     } catch (error) { if (ticket === epoch) status(String(error.message ?? error)); }
-    finally { if (ticket === epoch) { busy = false; operation = null; globe.update({ active: false }); controls(); $('globe-state').textContent = report?.status === 'complete' ? '本次运行已完成' : report?.status === 'budget_exhausted' ? '已达到运行预算' : '已停止 · 等待下一次运行'; } }
+    finally { if (ticket === epoch) { busy = false; operation = null; globe.update({ active: false, ...(currentMode === 'local' && report?.status === 'complete' ? { confirmed: true } : {}) }); controls(); $('globe-state').textContent = report?.status === 'complete' ? '本次运行已完成' : report?.status === 'budget_exhausted' ? '已达到运行预算' : '已停止 · 等待下一次运行'; } }
   };
   $('stop-composer').onclick = async () => {
     epoch++; const id = operation; report = null; globe.update({ active: false, confirmed: false });

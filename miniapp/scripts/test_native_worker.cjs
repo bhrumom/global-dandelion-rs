@@ -1,7 +1,7 @@
 // Actions-only protocol/real-engine fixture. Not an installed Host/picker claim.
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
-const { mkdtemp, readFile, writeFile, rm } = require('node:fs/promises');
+const { mkdtemp, readFile, writeFile, rm, readdir, symlink } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');

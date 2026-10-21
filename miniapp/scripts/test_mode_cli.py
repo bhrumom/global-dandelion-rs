@@ -42,4 +42,13 @@ authorized = true
     assert call('--local-loopback', '--lan-only').returncode != 0
     config.write_text(config.read_text().replace('class = "private"', 'class = "wan"'))
     assert call('--lan-only').returncode != 0
+    source = Path(directory) / 'source'
+    source.mkdir()
+    (source / 'message').write_text('Rust stream')
+    config.write_text('[state]\nenabled=false\n')
+    streamed = subprocess.run([args.binary, '--config', str(config), 'run', '--source', str(source), '--repeat', '4', '--interval-ms', '500', '--progress-json', '--json'], capture_output=True, text=True, timeout=15)
+    assert streamed.returncode == 0, streamed.stderr
+    frames = [json.loads(line) for line in streamed.stdout.splitlines()]
+    assert any(frame.get('event') == 'progress' and frame['pass_chunks_sent'] > 0 for frame in frames[:-1])
+    assert frames[-1]['verified_payload_bytes'] == 4 * len(b'Rust stream')
 print('mode fences: local overrides imported TLS, LAN excludes WAN, conflicting/empty local targets rejected')

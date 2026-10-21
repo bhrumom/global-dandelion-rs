@@ -93,6 +93,7 @@ pub fn execute(cli: &Cli) -> Result<u8> {
                     cfg,
                     RunOptions {
                         repeat: args.repeat,
+                        progress_json: args.progress_json,
                         watch: args.watch,
                         interval_ms: args.interval_ms,
                         tui: args.tui,

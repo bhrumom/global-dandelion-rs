@@ -25,3 +25,12 @@ Acceptance remains pending exact-head Actions, signer/catalog/install and mobile
 native adapter/device proof. Android self-contained packaging must include nested
 composer/globe modules. Existing mobile bridges with empty target pools do not
 prove native transmission. No blanket full-function or physical-energy claim.
+
+Actions recovery: be1939f geometry tests passed but Clippy required as_chunks;
+3b58e26 passed Linux x86/ARM native quality, dependency audit and required gates.
+Browser detected genuine 390px selector overflow (GC01 implementation bug); fix
+wraps controls without hiding page overflow. Native staging/send/release reached
+the cleanup assertion, where the fixture omitted fs readdir/symlink imports
+(test flaw). Preserve those proofs and correct the focused failures.
+Receipt progress is now a bounded opt-in Rust observer, separate from process
+admission; unchanged counters cannot keep a flying route animated indefinitely.

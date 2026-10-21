@@ -47,6 +47,9 @@ measurement of physical energy or proof of wireless radiation.
 - GC06: request location only on explicit gesture; offer manual lat/lon when denied.
   Never invent the device location or derive peer locations from random IPs.
   User-entered endpoint map coordinates are display metadata, never authorization.
+  An opt-in bounded NDJSON progress observer samples real Rust receipt counters
+  at most once per second (1800 samples), leaving default CLI JSON unchanged.
+  Flying trajectories require receipt-counter progress, not mere process admission.
   Routes require actual running/completed operation evidence plus known endpoints;
   distinguish active, confirmed, failed and cancelled. Stop visualization when
   operation stops. Missing coordinates display status rather than fake global paths.

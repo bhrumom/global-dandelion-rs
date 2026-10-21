@@ -52,7 +52,9 @@ async function awaitBrowser() {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.locator('#message').fill('mobile Rust'); await page.locator('#launch').click();
     await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('本地回环完成'));
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); count++;
+    await page.screenshot({ path: 'miniapp-ui-globe-mobile.png', fullPage: true });
+    const overflow = await page.evaluate(() => [...document.querySelectorAll('body *')].filter(node => node.getBoundingClientRect().right > innerWidth + 1).map(node => ({ tag: node.tagName, id: node.id, class: node.className, right: node.getBoundingClientRect().right })).slice(0, 12));
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, JSON.stringify(overflow)); count++;
     const pixels = await page.evaluate(() => { const gl = document.getElementById('earth').getContext('webgl'); if (!gl) return 0; const pixel = new Uint8Array(4); gl.readPixels(gl.drawingBufferWidth / 2, gl.drawingBufferHeight / 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel); return pixel[3]; });
     assert.ok(pixels > 0, 'real WebGL sphere must render'); count++;
     await page.screenshot({ path: 'miniapp-ui-globe-mobile.png', fullPage: true });

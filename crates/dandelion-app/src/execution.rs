@@ -98,6 +98,7 @@ fn extend_resume_mount_scope(
 }
 #[derive(Clone, Debug)]
 pub struct RunOptions {
+    pub progress_json: bool,
     pub repeat: u32,
     pub watch: bool,
     pub interval_ms: u64,
@@ -109,6 +110,7 @@ impl Default for RunOptions {
     fn default() -> Self {
         Self {
             repeat: 1,
+            progress_json: false,
             watch: false,
             interval_ms: 1000,
             tui: false,
@@ -253,12 +255,45 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
         let (tx, rx) = tokio::sync::watch::channel(Snapshot::default());
         let ui_cancel = cancel.child_token();
         let _ui_guard = ui_cancel.clone().drop_guard();
+        let mut progress_rx = rx.clone();
+        let progress = options.progress_json.then(|| {
+            let child = ui_cancel.clone();
+            tokio::spawn(async move {
+                let mut timer = tokio::time::interval(Duration::from_secs(1));
+                for sample in 0..1800 {
+                    tokio::select! {
+                        biased;
+                        _ = child.cancelled() => break,
+                        _ = timer.tick() => {
+                            let changed = progress_rx.has_changed().unwrap_or(false);
+                            let snapshot = progress_rx.borrow_and_update().clone();
+                            if changed && snapshot.chunks_sent > 0 {
+                                crate::output::json(&serde_json::json!({
+                                    "event": "progress",
+                                    "sequence": sample + 1,
+                                    "pass_verified_payload_bytes": snapshot.verified_payload_bytes,
+                                    "pass_chunks_sent": snapshot.chunks_sent,
+                                    "pass_files_completed": snapshot.files_completed,
+                                }))?;
+                            }
+                        }
+                    }
+                }
+                Ok::<(), Error>(())
+            })
+        });
         let ui = options.tui.then(|| {
             let child = ui_cancel.clone();
             tokio::task::spawn_blocking(move || dandelion_tui::observe(rx, child))
         });
         let output = service(config, options, cancel, tx, tls_config, runtime_checkpoints).await;
         ui_cancel.cancel();
+        if let Some(progress) = progress {
+            tokio::time::timeout(deadline, progress)
+                .await
+                .map_err(|_| Error::ShutdownTimeout)?
+                .map_err(|error| Error::Task(error.to_string()))??;
+        }
         if let Some(ui) = ui {
             tokio::time::timeout(deadline, ui)
                 .await

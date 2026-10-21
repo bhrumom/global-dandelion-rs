@@ -13,6 +13,7 @@
     <section class="earth-stage" aria-label="三维地球与运行状态">
       <p class="earth-caption">让善意流转 · 让每一块数据有据可查</p>
       <div class="earth-halo"><canvas id="earth" width="800" height="650" tabindex="0" role="img" aria-label="3D 地球，可拖动或用方向键旋转"></canvas></div>
+      <p id="earth-fallback" role="status" hidden></p>
       <div class="earth-readout"><span class="live-dot"></span><span id="globe-state" role="status" aria-live="polite">正在加载 Rust 地球…</span></div>
       <p id="location-summary" class="location-summary">所在点未设置 · 拖动地球旋转</p>
     </section>

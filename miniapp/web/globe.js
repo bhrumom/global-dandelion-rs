@@ -27,6 +27,7 @@ export function createGlobe(canvas, rust, status) {
   const mesh = rust.globe_mesh(48, 96);
   const buffer = () => { const value = gl.createBuffer(); buffers.push(value); return value; };
   const surface = buffer(), lines = buffer(); gl.bindBuffer(gl.ARRAY_BUFFER, surface); gl.bufferData(gl.ARRAY_BUFFER, mesh, gl.STATIC_DRAW);
+  let pulseUntil = 0;
   let yaw = -.5, pitch = .12, pointer = null, previous = 0, frame = 0, disposed = false;
   let operation = { active: false, mode: 'local', origin: null, destination: null, confirmed: false }, route = null;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -48,7 +49,7 @@ export function createGlobe(canvas, rust, status) {
     gl.bindBuffer(gl.ARRAY_BUFFER, surface); gl.enableVertexAttribArray(position); gl.enableVertexAttribArray(land);
     gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 16, 0); gl.vertexAttribPointer(land, 1, gl.FLOAT, false, 16, 12); gl.drawArrays(gl.TRIANGLES, 0, mesh.length / 4);
     if (route) drawLine(route, operation.confirmed ? [0.43, 1, .74, 1] : [.35, .75, 1, .65]);
-    if (operation.active && operation.origin && operation.mode !== 'global') {
+    if ((operation.active || time < pulseUntil) && operation.origin && operation.mode !== 'global') {
       for (let i = 0; i < (reduced.matches ? 1 : 3); i++) {
         const phase = reduced.matches ? .5 : ((time / 2600 + i / 3) % 1);
         drawLine(rust.globe_ripple(...operation.origin, 1 + phase * 24, 64), operation.mode === 'hotspot' ? [1, .75, .35, 1 - phase] : [.35, .95, .85, 1 - phase]);
@@ -58,7 +59,7 @@ export function createGlobe(canvas, rust, status) {
       const end = Math.max(2, Math.floor((time / 1600 % 1) * (route.length / 3)));
       drawLine(route.slice(Math.max(0, end - 6) * 3, end * 3), [.8, 1, 1, 1]);
     }
-    if (operation.active && !reduced.matches) frame = requestAnimationFrame(draw);
+    if ((operation.active || time < pulseUntil) && !reduced.matches) frame = requestAnimationFrame(draw);
   }
   const redraw = () => { if (!frame && !disposed && !document.hidden) frame = requestAnimationFrame(draw); };
   canvas.addEventListener('pointerdown', event => { pointer = { x: event.clientX, y: event.clientY, id: event.pointerId }; canvas.setPointerCapture(event.pointerId); }, { signal: events.signal });
@@ -73,6 +74,8 @@ export function createGlobe(canvas, rust, status) {
   redraw();
   return {
     update(next) {
+      if (next.confirmed === true) pulseUntil = performance.now() + 2400;
+      if (next.confirmed === false) pulseUntil = 0;
       operation = { ...operation, ...next }; route = operation.mode === 'global' && (operation.active || operation.confirmed) && operation.origin && operation.destination ? rust.globe_route(...operation.origin, ...operation.destination, 96) : null;
       canvas.dataset.operation = operation.active ? 'running' : operation.confirmed ? 'confirmed' : 'idle'; redraw();
     },
