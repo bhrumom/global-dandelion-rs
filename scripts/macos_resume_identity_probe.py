@@ -48,9 +48,13 @@ int main(int argc, char **argv) {
             os.sync()
             report["eventCursor"] = json.loads(command(str(events), str(file), "cursor"))
             report["unchangedHistory"] = json.loads(command(str(events), str(file), str(report["eventCursor"]["cursor"])))
+            report["parentCursor"] = json.loads(command(str(events), str(root), "cursor", "host"))
+            report["unchangedParentHistory"] = json.loads(command(str(events), str(root), str(report["parentCursor"]["cursor"]), "host"))
         else:
             snapshot_history = json.loads(command(str(events), str(file), str(report["eventCursor"]["cursor"])))
             report.setdefault("remountedHistory", []).append(snapshot_history)
+            report.setdefault("remountedParentHistory", []).append(json.loads(command(
+                str(events), str(root), str(report["parentCursor"]["cursor"]), "host")))
         stat = file.stat()
         info = plistlib.loads(command("/usr/sbin/diskutil", "info", "-plist", str(mount)))
         snapshot = {"attempt": attempt, "volumeUUID": info.get("VolumeUUID"),

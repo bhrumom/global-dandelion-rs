@@ -27,7 +27,9 @@ static void observe(ConstFSEventStreamRef stream, void *context, size_t count,
 }
 
 int main(int argc, char **argv) {
-    if (argc != 3) return 2;
+    if (argc != 3 && argc != 4) return 2;
+    int host = argc == 4 && !strcmp(argv[3], "host");
+    if (argc == 4 && !host) return 2;
     struct stat info;
     if (stat(argv[1], &info)) return 3;
     CFUUIDRef uuid = FSEventsCopyUUIDForDevice(info.st_dev);
@@ -47,15 +49,21 @@ int main(int argc, char **argv) {
     char *end = NULL;
     uint64_t since = strtoull(argv[2], &end, 10);
     if (!end || *end) return 5;
-    CFStringRef relative = CFSTR("");
+    CFStringRef relative = host
+        ? CFStringCreateWithFileSystemRepresentation(NULL, argv[1])
+        : CFStringCreateCopy(NULL, CFSTR(""));
+    if (!relative) return 6;
     CFArrayRef paths = CFArrayCreate(NULL, (const void **)&relative, 1, &kCFTypeArrayCallBacks);
+    CFRelease(relative);
     if (!paths) return 6;
     struct observation out = {0};
     FSEventStreamContext context = {0, &out, NULL, NULL, NULL};
-    FSEventStreamRef stream = FSEventStreamCreateRelativeToDevice(NULL, observe,
-        &context, info.st_dev, paths, since, 0.1,
-        kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagWatchRoot |
-        kFSEventStreamCreateFlagFileEvents);
+    FSEventStreamCreateFlags options = kFSEventStreamCreateFlagNoDefer |
+        kFSEventStreamCreateFlagWatchRoot | kFSEventStreamCreateFlagFileEvents;
+    FSEventStreamRef stream = host
+        ? FSEventStreamCreate(NULL, observe, &context, paths, since, 0.1, options)
+        : FSEventStreamCreateRelativeToDevice(NULL, observe, &context,
+            info.st_dev, paths, since, 0.1, options);
     CFRelease(paths);
     if (!stream) return 7;
     CFRunLoopRef loop = CFRunLoopGetCurrent();

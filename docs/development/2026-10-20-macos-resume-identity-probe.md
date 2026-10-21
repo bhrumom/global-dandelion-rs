@@ -38,3 +38,11 @@ or accepts a synthetic proof from a WebView. Apple describes persistent streams
 as advisory, recommends per-device streams, and requires a rescan on dropped,
 wrapped or root-change events:
 https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/UsingtheFSEventsFramework/UsingtheFSEventsFramework.html
+
+Actions39522936806 found the test image had no daemon UUID and its per-device
+replay returned HistoryDone without the real remount events. HistoryDone alone is
+therefore insufficient. Keep that negative result. A second instrument watches
+the task-owned parent directory on the host's data filesystem, recording the
+parent daemon UUID and history controls separately. It tests whether mountpoint
+changes are visible in the containing filesystem's history, without treating the
+external volume's advisory content log as a mount-generation authority.
