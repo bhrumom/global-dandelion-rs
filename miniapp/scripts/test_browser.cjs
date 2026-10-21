@@ -81,7 +81,7 @@ const origin = 'https://global-dandelion.fixture.invalid';
       HTMLCanvasElement.prototype.getContext = function(kind, ...args) { return /webgl|experimental-webgl/.test(kind) ? null : original.call(this, kind, ...args); };
     });
     await software.goto(origin + '/index.html');
-    await software.waitForFunction(() => document.getElementById('earth').dataset.renderer === 'software-3d' && document.getElementById('earth').getContext('2d').getImageData(400, 325, 1, 1).data[3] > 0);
+    await software.waitForFunction(() => document.getElementById('earth').dataset.renderer === 'software-3d' && document.getElementById('earth').getContext('2d').getImageData(document.getElementById('earth').width / 2, document.getElementById('earth').height / 2, 1, 1).data[3] > 0);
     check(await software.locator('#earth-fallback').isVisible(), false);
     const beforeRotation = await software.locator('#earth').evaluate(canvas => canvas.toDataURL());
     await software.locator('#earth').focus(); for (let i = 0; i < 5; i++) await software.keyboard.press('ArrowRight');
