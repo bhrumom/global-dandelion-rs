@@ -46,3 +46,18 @@ the task-owned parent directory on the host's data filesystem, recording the
 parent daemon UUID and history controls separately. It tests whether mountpoint
 changes are visible in the containing filesystem's history, without treating the
 external volume's advisory content log as a mount-generation authority.
+
+Actions39523154205 (source20a85cf) also falsified the containing-filesystem history
+as currently proposed: its UUID remained present, both real remounts completed,
+and historical replay returned HistoryDone, but no Mount/Unmount flags appeared.
+The unchanged control reported only HistoryDone. Other file changes in the parent
+were observable; they do not prove a mount generation. Therefore neither tested
+history variant is sufficient to authorize reuse of a durable checkpoint.
+
+Retained evidence: Actions39434309650 (statfs),39522936806 (per-device log),
+39523154205 (parent history). These are completed negative design experiments.
+They change no production capability, package version, Host or installed engine.
+The next implementation must supply a source lifetime/generation authority and
+test its interruption/remount/history-loss controls. Do not enable Mac resume by
+merely removing the platform guard, accepting HistoryDone, or trusting file/volume
+UUID equality. Full cross-restart parity remains unimplemented.
