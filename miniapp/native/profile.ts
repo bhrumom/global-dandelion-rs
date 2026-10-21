@@ -25,7 +25,7 @@ function boundedFile(path: string): Buffer {
     return buffer.subarray(0, length);
   } finally { closeSync(fd); }
 }
-type Settings = { transport: { mode: string; tls: { ca_file: string; certificate_file: string; private_key_file: string; peers: { address: string; server_name: string }[] } }; scanner: { roots: unknown[]; allowed_mount_prefixes: unknown[] }; state: { directory: string } };
+type Settings = { transport: { mode: string; tls: { ca_file: string; certificate_file: string; private_key_file: string; peers: { address: string; server_name: string; class: string }[] } }; scanner: { roots: unknown[]; allowed_mount_prefixes: unknown[] }; state: { directory: string } };
 export function createProfile(binaryPath: string, defaultPath: string, directory: string) {
   if (!isAbsolute(directory)) throw new Error("PRIVATE_DATA_DIRECTORY_REQUIRED");
   const info = lstatSync(directory);
@@ -71,7 +71,9 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
       const tls = settings.transport.tls;
       const remote = settings.transport.mode === "tls";
       return { binaryPath, configPath, allowedRoots: [], authorizePickedRoots: true, stateDirectory,
-        targetPools: [{ id: remote ? "configured" : "loopback", label: remote ? "已明确授权的 mTLS 目标" : "本机回环验证" }],
+        targetPools: [{ id: "loopback", label: "本机回环验证" },
+          ...(remote ? [{ id: "configured", label: "已明确授权的 mTLS 目标" }] : []),
+          ...(remote && tls.peers.some(peer => ["lan", "private"].includes(peer.class)) ? [{ id: "lan", label: "已授权热点／局域网设备" }] : [])],
         ...(remote ? { receive: { targetPoolId: "configured", caFile: tls.ca_file, certificateFile: tls.certificate_file, privateKeyFile: tls.private_key_file, bind: receiveBind, allowedClients: [...new Set(tls.peers.map(peer => peer.address.startsWith("[") ? peer.address.slice(1, peer.address.indexOf("]")) : peer.address.slice(0, peer.address.lastIndexOf(":"))))], timeoutMs: 60000 } } : {}),
       };
     },

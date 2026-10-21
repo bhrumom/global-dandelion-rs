@@ -9,9 +9,10 @@
  * root, and accepting individual files would silently widen the sent set.
  */
 import { spawn } from "node:child_process";
+import { stageFiles } from "./staging.js";
 import { randomUUID } from "node:crypto";
-import { lstat, realpath, stat } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, sep } from "node:path";
+import { lstat, readdir, realpath, stat } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import type {
   MiniAppCapability,
   MiniAppSelectionEntry,
@@ -146,10 +147,23 @@ export function createDandelionCliBackend(
   const platform = config.platform ?? process.platform;
   const nativeCliSupported = platform === "linux" || platform === "darwin";
   const spawnCommand = ports.spawn ?? defaultSpawn(config.binaryPath, config.configPath);
-  const selections = new Map<string, { root: string; device: bigint; inode: bigint; expiresAt: number }>();
+  const selections = new Map<string, { root: string; device: bigint; inode: bigint; expiresAt: number; users?: number; released?: boolean; dispose?: () => Promise<void> }>();
   const operations = new Map<string, Operation>();
   const active = new Set<NativeRun>();
   let generation = 0;
+  const stagingJobs = new Set<Promise<Awaited<ReturnType<typeof stageFiles>>>>();
+  const stageSnapshot = (paths: string[], limits: { maxFiles: number; maxBytes: number }, text = '') => {
+    if (stagingJobs.size) throw new Error("STAGING_BUSY");
+    const ticket = generation;
+    const job = (async () => {
+      const staged = await stageFiles(paths, stateDirectory!, limits, text);
+      if (ticket !== generation) { await staged.dispose(); throw new Error("DANDELION_CANCELLED"); }
+      return staged;
+    })();
+    stagingJobs.add(job);
+    void job.then(() => stagingJobs.delete(job), () => stagingJobs.delete(job));
+    return job;
+  };
   const roots = config.allowedRoots.filter((root) => isAbsolute(root));
   const stateDirectory = config.stateDirectory && isAbsolute(config.stateDirectory) ? config.stateDirectory : null;
   const compatDirectory = config.compatDirectory && isAbsolute(config.compatDirectory) ? config.compatDirectory : null;
@@ -171,13 +185,17 @@ export function createDandelionCliBackend(
     return resolvedRoots;
   };
 
+  const dropSelection = (id: string) => {
+    const record = selections.get(id); selections.delete(id);
+    if (record) { record.released = true; if (!record.users) void record.dispose?.().catch(() => {}); }
+  };
   const pruneSelections = (): void => {
     const now = Date.now();
-    for (const [id, record] of selections) if (record.expiresAt <= now) selections.delete(id);
+    for (const [id, record] of selections) if (record.expiresAt <= now && !record.users) dropSelection(id);
     while (selections.size > MAX_SELECTIONS) {
       const oldest = selections.keys().next().value;
       if (oldest === undefined) break;
-      selections.delete(oldest);
+      dropSelection(oldest);
     }
   };
 
@@ -193,7 +211,7 @@ export function createDandelionCliBackend(
     pruneSelections();
     const record = selections.get(selectionId);
     if (!record) throw new Error("UNKNOWN_SELECTION");
-    if (record.expiresAt <= Date.now()) { selections.delete(selectionId); throw new Error("SELECTION_EXPIRED"); }
+    if (record.expiresAt <= Date.now()) { dropSelection(selectionId); throw new Error("SELECTION_EXPIRED"); }
     const info = await lstat(record.root, { bigint: true });
     if (!info.isDirectory() || info.isSymbolicLink() || info.dev !== record.device || info.ino !== record.inode) throw new Error("SELECTION_SOURCE_CHANGED");
     return record.root;
@@ -310,10 +328,22 @@ export function createDandelionCliBackend(
     },
     async pick(mode, limits) {
       const ticket = generation;
-      // The engine works on a source root; per-file selection would widen it.
-      if (mode !== "directory") throw new Error("DIRECTORY_SELECTION_REQUIRED");
+      if (mode === "files" && !stateDirectory) throw new Error("PRIVATE_STAGING_REQUIRED");
       const picked = await ports.pick(mode, limits);
       if (!picked || picked.length === 0) return null;
+      if (mode === "files") {
+        if (config.authorizePickedRoots !== true) {
+          const allowed = await canonicalRoots();
+          for (const file of picked) { const canonical = await realpath(file.path); if (!allowed.some(root => insideRoot(root, canonical))) throw new Error("ROOT_NOT_AUTHORIZED"); }
+        }
+        const staged = await stageSnapshot(picked.map(file => file.path), limits);
+        if (ticket !== generation) { await staged.dispose(); throw new Error("DANDELION_CANCELLED"); }
+        pruneSelections();
+        if (selections.size >= MAX_SELECTIONS) { await staged.dispose(); throw new Error("SELECTION_LIMIT_EXCEEDED"); }
+        const info = await stat(staged.root, { bigint: true }), selectionId = randomUUID();
+        selections.set(selectionId, { root: staged.root, device: info.dev, inode: info.ino, expiresAt: Date.now() + SELECTION_TTL_MS, dispose: staged.dispose });
+        return { selectionId, entries: staged.entries };
+      }
       const root = await realpath(picked[0]!.path);
       const info = await stat(root, { bigint: true });
       if (dirname(root) === root) throw new Error("FILESYSTEM_ROOT_NOT_AUTHORIZED");
@@ -329,8 +359,26 @@ export function createDandelionCliBackend(
       const entries: MiniAppSelectionEntry[] = [{ name: basename(root), size: picked[0]!.size }];
       return { selectionId, entries };
     },
+    async compose(text, selectionId) {
+      if (!stateDirectory || Buffer.byteLength(text) > 65536 || !text) throw new Error("MESSAGE_LIMIT");
+      const ticket = generation;
+      const previous = selectionId ? selections.get(selectionId) : undefined;
+      if (selectionId && (!previous || !previous.dispose)) throw new Error("STAGED_SELECTION_REQUIRED");
+      if (previous) previous.users = (previous.users ?? 0) + 1;
+      let staged;
+      try {
+        const source = previous ? (await readdir(await requireSelection(selectionId!))).map(name => join(previous.root, name)) : [];
+        staged = await stageSnapshot(source, { maxFiles: 128, maxBytes: 1024 ** 3 }, text);
+      } finally { if (previous) { previous.users!--; if (previous.released && !previous.users) void previous.dispose?.().catch(() => {}); } }
+      if (ticket !== generation) { await staged.dispose(); throw new Error("DANDELION_CANCELLED"); }
+      pruneSelections();
+      if (selections.size >= MAX_SELECTIONS) { await staged.dispose(); throw new Error("SELECTION_LIMIT_EXCEEDED"); }
+      const info = await stat(staged.root, { bigint: true }), id = randomUUID();
+      selections.set(id, { root: staged.root, device: info.dev, inode: info.ino, expiresAt: Date.now() + SELECTION_TTL_MS, dispose: staged.dispose });
+      return { selectionId: id, entries: staged.entries };
+    },
     release(selectionId) {
-      selections.delete(selectionId);
+      dropSelection(selectionId);
       return Promise.resolve();
     },
     async send(sendConfig: MiniAppTransferSendConfig) {
@@ -342,6 +390,8 @@ export function createDandelionCliBackend(
       if (ticket !== generation) throw new Error("DANDELION_CANCELLED");
       if (!config.targetPools.some((pool) => pool.id === sendConfig.targetPoolId)) throw new Error("UNKNOWN_TARGET_POOL");
       const argv = ["run", "--source", root];
+      if (sendConfig.targetPoolId === "loopback") argv.push("--local-loopback");
+      if (sendConfig.targetPoolId === "lan") argv.push("--lan-only");
       if (sendConfig.repeat !== undefined) argv.push("--repeat", String(sendConfig.repeat));
       if (sendConfig.watch === true) argv.push("--watch");
       if (sendConfig.intervalMs !== undefined) argv.push("--interval-ms", String(sendConfig.intervalMs));
@@ -351,7 +401,15 @@ export function createDandelionCliBackend(
       if (sendConfig.queueCapacity !== undefined) argv.push("--queue-capacity", String(sendConfig.queueCapacity));
       if (sendConfig.chunkBytes !== undefined) argv.push("--chunk-bytes", String(sendConfig.chunkBytes));
       argv.push("--json");
-      return startOperation(argv, "single");
+      const record = selections.get(sendConfig.selectionId);
+      if (!record) throw new Error("UNKNOWN_SELECTION");
+      record.users = (record.users ?? 0) + 1;
+      try {
+        const result = startOperation(argv, "single");
+        const release = () => { record.users!--; if (record.released && !record.users) void record.dispose?.().catch(() => {}); };
+        void operations.get(result.operationId)!.run.handle.done.then(release, release);
+        return result;
+      } catch (error) { record.users!--; throw error; }
     },
     async receive(receiveConfig) {
       const ticket = generation;
@@ -396,14 +454,17 @@ export function createDandelionCliBackend(
       operation.run.cancelled = true;
       operation.run.handle.kill();
     },
-    cancelAll() {
+    async cancelAll() {
       generation += 1;
+      const owned = [...selections.values()], runs = [...active], stages = [...stagingJobs];
       for (const operation of operations.values()) {
         if (operation.state === "running") operation.state = "cancelled";
       }
       for (const run of active) { run.cancelled = true; run.handle.kill(); }
       operations.clear();
-      selections.clear();
+      for (const id of selections.keys()) dropSelection(id);
+      await Promise.allSettled([...runs.map(run => run.handle.done), ...stages]);
+      await Promise.all(owned.map(record => record.dispose?.()));
     },
     async scan(mode, rootId) {
       const ticket = generation;

@@ -374,10 +374,13 @@
         "crates/dandelion-transport/src/lib.rs",
         "crates/dandelion-app/src/supervisor.rs",
         "scripts/acceptance.py",
-        "docs/specs/native-apple-core.md"
+        "docs/specs/native-apple-core.md",
+        "docs/specs/globe-composer.md",
+        "miniapp/scripts/test_mode_cli.py"
       ],
       "verification_scope": "current-ci",
-      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation.",
+      "ui_extension": "Globe composer: explicit local UDP override / LAN-only authorized mTLS filtering; Rust/Wasm packet loopback is separately labelled. Mobile native/install proof remains pending."
     },
     {
       "id": "loopback-receive",
@@ -439,10 +442,13 @@
         "crates/dandelion-transport/src/tls.rs",
         "crates/dandelion-core/src/targets.rs",
         "scripts/tls_acceptance.py",
-        "docs/specs/native-apple-core.md"
+        "docs/specs/native-apple-core.md",
+        "docs/specs/globe-composer.md",
+        "miniapp/scripts/test_mode_cli.py"
       ],
       "verification_scope": "current-ci",
-      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation.",
+      "ui_extension": "Globe composer: explicit local UDP override / LAN-only authorized mTLS filtering; Rust/Wasm packet loopback is separately labelled. Mobile native/install proof remains pending."
     },
     {
       "id": "startup-drive-scan",

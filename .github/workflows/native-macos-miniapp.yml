@@ -43,6 +43,7 @@ jobs:
           native-built/dandelion.bin --config native-built/default.toml self-test --json
       - name: Exercise package-owned runtime and real Rust engine
         run: |
+          python3 miniapp/scripts/test_mode_cli.py --binary native-built/dandelion.bin
           node miniapp/scripts/test_native_worker.cjs native-built
           python3 miniapp/scripts/test_native_tls.py native-built
       - name: Build same-revision offline Wasm resources

@@ -32,7 +32,7 @@ function main() {
     pick: async mode => {
       const result = await host("file-picker", { mode });
       if (result === null) return null;
-      if (!Array.isArray(result) || result.length > 1 || result.some(p => !p || typeof p.path !== "string" || typeof p.name !== "string" || typeof p.size !== "number")) throw new Error("INVALID_PICKER_RESULT");
+      if (!Array.isArray(result) || result.length > (mode === "files" ? 128 : 1) || result.some(p => !p || typeof p.path !== "string" || typeof p.name !== "string" || typeof p.size !== "number")) throw new Error("INVALID_PICKER_RESULT");
       return result;
     },
   } satisfies Parameters<typeof createDandelionCliBackend>[1];
@@ -47,7 +47,7 @@ function main() {
       const bind = args && typeof args === "object" ? Reflect.get(args, "bind") : null;
       if (!profile.validBind(bind, true) || !profile.options().receive) return { ok: false, error: { code: "RECEIVER_TLS_REQUIRED", message: "请先导入带证书的 mTLS 配置，并填写本机 IP:端口（端口至少 1024）。" } };
       if (await host("confirmation", { detail: "允许本小程序使用导入的 mTLS 证书，在 " + bind + " 接收传输。配置后仍需点击开始接收。" }) !== true) return denied;
-      try { profile.configureReceiver(bind); backend.cancelAll?.(); backend = createDandelionCliBackend(profile.options(), ports); router = makeRouter(); return { ok: true, data: { bind, configured: true } }; } catch { return denied; }
+      try { profile.configureReceiver(bind); await backend.cancelAll?.(); backend = createDandelionCliBackend(profile.options(), ports); router = makeRouter(); return { ok: true, data: { bind, configured: true } }; } catch { return denied; }
     }
     if (typeof method === "string" && /^compat\.(packetInspect|countryLookup|linkExercise|linkRecover)$/.test(method)) {
       try { return { ok: true, data: publicResult(await compatibility(method.split(".")[1]!, args)) }; } catch { return denied; }
@@ -65,7 +65,7 @@ function main() {
         if (!picked?.length) return denied;
         candidate = profile.prepareImport(picked[0]!.path);
         if (!await host("confirmation", { detail: "导入配置并授权其中的证书和目标：" + candidate.summary.slice(0, 180) })) return denied;
-        candidate.commit(); backend.cancelAll?.();
+        candidate.commit(); await backend.cancelAll?.();
         backend = createDandelionCliBackend(profile.options(), ports); router = makeRouter();
         return { ok: true, data: { imported: true, privateState: true, automaticSourcesRemoved: true } };
       } catch { return denied; } finally { candidate?.discard(); }
@@ -83,15 +83,18 @@ function main() {
     }
     return publicResult(result);
   };
-  const shutdown = () => {
-    backend.cancelAll?.();
+  let closing: Promise<void> | null = null;
+  const shutdown = () => closing ??= (async () => {
+    await backend.cancelAll?.();
     for (const call of hostCalls.values()) { clearTimeout(call.timer); call.reject(new Error("RUNTIME_CLOSED")); }
     hostCalls.clear();
-  };
-  process.once("SIGTERM", () => { shutdown(); process.exit(0); });
-  process.once("SIGINT", () => { shutdown(); process.exit(0); });
-  process.stdin.on("end", () => { shutdown(); process.exit(0); });
+  })();
+  const close = () => { void shutdown().then(() => process.exit(0), () => process.exit(1)); };
+  process.once("SIGTERM", close);
+  process.once("SIGINT", close);
+  process.stdin.on("end", close);
   const handle = async (line: string) => {
+    if (closing) return;
     const message = JSON.parse(line) as Record<string, unknown>;
     if (message.kind === "host-result" && typeof message.callId === "string") {
       const pending = hostCalls.get(message.callId);

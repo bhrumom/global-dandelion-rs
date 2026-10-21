@@ -100,6 +100,12 @@ pub enum ConfigCommand {
 }
 #[derive(Debug, clap::Args)]
 pub struct Run {
+    /// Use local UDP verification even when the saved profile uses TLS.
+    #[arg(long, conflicts_with = "lan_only")]
+    pub local_loopback: bool,
+    /// Restrict this run to explicitly authorized direct LAN/private TLS peers.
+    #[arg(long, conflicts_with = "local_loopback")]
+    pub lan_only: bool,
     #[arg(long, value_name="DIR", action=clap::ArgAction::Append)]
     pub source: Vec<PathBuf>,
     #[arg(long)]

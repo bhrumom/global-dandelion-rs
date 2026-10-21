@@ -238,3 +238,9 @@ registerPageTools([{
   description: '读取当前页面的本地校验状态与版本。',
   run: () => ({ ready, running, selectedFiles: selected.length, packets: report?.packets ?? 0, verifiedBytes: report?.verifiedBytes ?? 0, appVersion: '__FABUSHI_APP_VERSION__' }),
 }]);
+
+// Same Rust adapter powers the globe and composer on all platforms.
+import { mountComposer } from './composer.js';
+let composerRust = null;
+if (ready) composerRust = await import('./pkg/dandelion_web_adapter.js');
+await mountComposer(composerRust, host);

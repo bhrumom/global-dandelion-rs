@@ -50,7 +50,40 @@ pub fn execute(cli: &Cli) -> Result<u8> {
         Command::Hotspot { command } => hotspot(command),
         Command::Update { command } => update(command),
         Command::Run(args) => {
-            let cfg = load(cli, args.overrides())?;
+            let mut cfg = load(cli, args.overrides())?;
+            if args.local_loopback || args.lan_only {
+                let mut scoped = cfg.get().clone();
+                if args.local_loopback {
+                    scoped.transport.mode = dandelion_config::Mode::Loopback;
+                } else {
+                    if !matches!(scoped.transport.mode, dandelion_config::Mode::Tls) {
+                        return Err(Error::Config(
+                            "LAN mode requires configured TLS peers".into(),
+                        ));
+                    }
+                    use dandelion_core::targets::NetworkClass;
+                    scoped.transport.tls.peers.retain(|peer| {
+                        let private = match peer.address.ip() {
+                            std::net::IpAddr::V4(ip) => ip.is_private() || ip.is_loopback(),
+                            std::net::IpAddr::V6(ip) => ip.is_unique_local() || ip.is_loopback(),
+                        };
+                        private
+                            && peer.authorized
+                            && matches!(peer.class, NetworkClass::Lan | NetworkClass::Private)
+                    });
+                    if scoped.transport.tls.peers.is_empty() {
+                        return Err(Error::Config(
+                            "LAN mode has no authorized direct local peers".into(),
+                        ));
+                    }
+                    scoped.transport.tls.target_pool.clear();
+                    scoped.transport.tls.target_count = 0;
+                    scoped.transport.tls.target_seed = None;
+                    scoped.transport.tls.wan_enabled = false;
+                    scoped.transport.tls.wan_allowlist.clear();
+                }
+                cfg = scoped.validate()?;
+            }
             if args.dry_run {
                 print_config(cfg.get(), cli.json)?;
                 return Ok(0);
