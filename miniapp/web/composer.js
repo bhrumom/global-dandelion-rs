@@ -4,10 +4,11 @@ import { formatBytes } from './host-tools.js';
 const $ = id => document.getElementById(id);
 const MAX_BYTES = 1024 ** 3, MAX_PACKETS = 1_000_000;
 export async function mountComposer(rust, host) {
-  let files = [], nativeSelection = null, nativeEntries = [], busy = false, epoch = 0, operation = null, origin = null, report = null, closed = false;
+  let pools = [], files = [], nativeSelection = null, nativeEntries = [], busy = false, epoch = 0, operation = null, origin = null, report = null, closed = false;
   const globe = rust ? createGlobe($('earth'), rust, text => { $('globe-state').textContent = text; }) : { update() {}, destroy() {} };
   const status = text => { if (!closed) $('composer-status').textContent = text; };
   const mode = () => $('mode').value;
+  const nativeLocal = () => mode() === 'local' && host.capabilities.has('transfer') && pools.some(pool => pool.id === 'loopback');
   const description = {
     local: '本地转轮：在本机用 Rust 完成 GDAN 编码与解码回环，不发送网络数据。',
     global: '全球发送：仅向你已授权的 mTLS 目标传输。轨迹为运行可视化，接收校验单独确认。',
@@ -19,7 +20,7 @@ export async function mountComposer(rust, host) {
     $('composer-export').disabled = !report || busy;
   };
   const list = () => {
-    const entries = mode() === 'local' ? files : nativeEntries;
+    const entries = mode() === 'local' && !nativeLocal() ? files : nativeEntries;
     $('composer-file-list').replaceChildren();
     for (const file of entries) { const row = document.createElement('li'); row.textContent = `${file.name} · ${formatBytes(file.size)}`; $('composer-file-list').append(row); }
     $('composer-selection').textContent = entries.length ? `${entries.length} 个文件 · ${formatBytes(entries.reduce((n, f) => n + f.size, 0))}` : '尚未添加文件';
@@ -41,7 +42,7 @@ export async function mountComposer(rust, host) {
   };
   $('attach').onclick = async () => {
     if (busy) return;
-    if (mode() === 'local') { $('composer-files').click(); return; }
+    if (mode() === 'local' && !nativeLocal()) { $('composer-files').click(); return; }
     if (!host.capabilities.has('selection')) { status('当前安装包没有原生文件选择能力；请安装对应平台的完整版本。'); return; }
     const ticket = epoch;
     $('attach').disabled = true;
@@ -55,7 +56,6 @@ export async function mountComposer(rust, host) {
     if (previous) await host.call('selection.release', { selectionId: previous });
     list(); status('文件已由安装包选择，尚未发送。');
   };
-  let pools = [];
   const refreshPools = async () => {
     const response = await host.call('offline.capabilities', {});
     pools = response.ok && Array.isArray(response.data?.targetPools) ? response.data.targetPools.slice(0, 16) : [];
@@ -126,7 +126,7 @@ export async function mountComposer(rust, host) {
   }
   async function nativeRun(ticket, repeats, text) {
     if (!host.capabilities.has('transfer')) throw new Error('此平台尚未安装可执行原生传输的适配；不会用动画冒充发送。');
-    const targetPoolId = $('composer-target').value;
+    const targetPoolId = nativeLocal() ? 'loopback' : $('composer-target').value;
     if (!targetPoolId) throw new Error('请先在高级工具中导入已授权的目标与 mTLS 配置，然后重新选择模式。');
     let sendSelection = nativeSelection, composedSelection = null;
     if (text) {
@@ -146,7 +146,7 @@ export async function mountComposer(rust, host) {
     operation = id;
     const destination = coordinates('destination-lat', 'destination-lon');
     globe.update({ active: true, mode: mode(), origin, destination, confirmed: false });
-    $('globe-state').textContent = mode() === 'global' ? '发送进行中 · 等待实际接收校验' : '局域网发送中 · 场能波澜';
+    $('globe-state').textContent = nativeLocal() ? '本机 UDP 回环 · Rust 校验中' : mode() === 'global' ? '发送进行中 · 等待实际接收校验' : '局域网发送中 · 场能波澜';
     status(origin && (mode() !== 'global' || destination) ? '传输已启动，轨迹表示运行过程，不代表已接收。' : '传输已启动；缺少端点坐标，暂不绘制地理轨迹。');
     while (!closed && ticket === epoch) {
       const result = await host.call('transfer.status', { operationId: id });
@@ -170,7 +170,7 @@ export async function mountComposer(rust, host) {
     busy = true; report = null; const ticket = ++epoch, repeats = Number($('cycles').value), currentMode = mode();
     controls(); $('composer-progress').value = 0; $('composer-packets').textContent = '0'; $('composer-bytes').textContent = '0 B'; $('composer-pass').textContent = `0 / ${repeats}`;
     try {
-      if (currentMode === 'local') { globe.update({ active: true, mode: 'local', origin, confirmed: false }); $('globe-state').textContent = origin ? '本地回环 · 所在点波澜' : '本地回环 · 所在点未设置'; await localRun(ticket, repeats, $('message').value); }
+      if (currentMode === 'local' && !nativeLocal()) { globe.update({ active: true, mode: 'local', origin, confirmed: false }); $('globe-state').textContent = origin ? '本地回环 · 所在点波澜' : '本地回环 · 所在点未设置'; await localRun(ticket, repeats, $('message').value); }
       else await nativeRun(ticket, repeats, $('message').value);
     } catch (error) { if (ticket === epoch) status(String(error.message ?? error)); }
     finally { if (ticket === epoch) { busy = false; operation = null; globe.update({ active: false }); controls(); $('globe-state').textContent = report?.status === 'complete' ? '本次运行已完成' : report?.status === 'budget_exhausted' ? '已达到运行预算' : '已停止 · 等待下一次运行'; } }
@@ -185,6 +185,7 @@ export async function mountComposer(rust, host) {
   };
   window.addEventListener('pagehide', () => { closed = true; epoch++; if (operation) void host.call('transfer.cancel', { operationId: operation }); if (nativeSelection) void host.call('selection.release', { selectionId: nativeSelection }); files = []; report = null; globe.destroy(); }, { once: true });
   await refreshPools();
+  if (nativeLocal()) $('mode-description').textContent = '本地转轮：安装包内 Rust 引擎执行本机 UDP 回环，不连接外部目标。';
   $('globe-state').textContent = rust ? '本地转轮 · Rust 已就绪' : 'Rust 内核加载失败';
   status(rust ? '输入文字或点击 ＋ 添加文件；点击 ↑ 开始本地回环。' : '无法加载随包 Rust 内核，请检查完整安装。'); controls();
 }

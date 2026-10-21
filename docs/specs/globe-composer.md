@@ -30,8 +30,9 @@ measurement of physical energy or proof of wireless radiation.
   Geographical land silhouette is coarse illustrative geometry, no accuracy claim.
 - GC03: local mode processes text and explicitly selected files with the existing
   Rust GDAN v2 encode/decode and BLAKE3 verification on every pass, including empty
-  files. Label this in-memory protocol loopback; retain native UDP transfer under
-  advanced tools. Finite repeats 1..10000, session byte budget, cooperative pacing,
+  files. When the installed package announces local native transport, the composer uses
+  its actual Rust UDP loopback. Otherwise label the Web/Wasm path as in-memory
+  protocol loopback; this fallback is not full mobile native parity. Finite repeats 1..10000, session byte budget, cooperative pacing,
   no overlapping work, cancellation generation fence and unload cleanup.
 - GC04: global sends only to configured authenticated targets through the installed
   package. Hotspot uses configured LAN peers only, never creates/adopts public
@@ -54,6 +55,13 @@ measurement of physical energy or proof of wireless radiation.
   transfer requires package-owned native integration and separate Android/iOS device
   proof; existing bridges that announce no targets must report unavailable clearly.
   An offline browser or contract fixture does not satisfy full mobile acceptance.
+
+## Dependency remediation
+
+The first exact-source Actions audit surfaced RUSTSEC-2026-0382/0383 in the
+existing lockfile. Resolve only rustls-webpki to 0.103.16 and webpki-root-certs
+to 1.0.10 (or compatible patched releases); preserve audit/license gates and
+re-run real authenticated TLS acceptance after the lockfile change.
 
 ## Verification and delivery
 

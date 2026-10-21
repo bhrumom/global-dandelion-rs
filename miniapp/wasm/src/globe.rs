@@ -203,7 +203,7 @@ mod tests {
     fn mesh_has_bounded_unit_sphere_vertices() {
         let mesh = globe_mesh(8, 16).unwrap();
         assert_eq!(mesh.len(), 8 * 16 * 24);
-        for v in mesh.chunks_exact(4) {
+        for v in mesh.as_chunks::<4>().0 {
             assert!((dot([v[0], v[1], v[2]], [v[0], v[1], v[2]]) - 1.0).abs() < 1e-5);
             assert!([0.0, 1.0].contains(&v[3]));
         }
