@@ -1,171 +1,114 @@
+// Actions-only: real Wasm/WebGL, with an explicitly labelled native UI fixture.
 const { chromium } = require('playwright');
 const { readFile } = require('node:fs/promises');
-const { resolve, sep } = require('node:path');
+const { resolve, sep, extname } = require('node:path');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const resources = resolve(process.argv[2]);
 const origin = 'https://global-dandelion.fixture.invalid';
-const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm' };
-const fs = require('node:fs');
-const browser = awaitBrowser();
-async function awaitBrowser() {
-  const instance = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  let count = 0;
-  const context = await instance.newContext({ acceptDownloads: true });
-  const external = [];
+(async () => {
+  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const context = await browser.newContext({ acceptDownloads: true });
+  const external = [], errors = []; let count = 0;
+  const check = (actual, expected) => { assert.deepEqual(actual, expected); count++; };
+  const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm' };
   await context.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) { external.push(url.origin); return route.abort(); }
     const path = resolve(resources, '.' + decodeURIComponent(url.pathname));
     if (!path.startsWith(resources + sep)) return route.abort();
-    try { await route.fulfill({ body: await readFile(path), contentType: mime[require('node:path').extname(path)] || 'application/octet-stream' }); }
+    try { await route.fulfill({ body: await readFile(path), contentType: mime[extname(path)] || 'application/octet-stream' }); }
     catch { await route.fulfill({ status: 404, body: '' }); }
   });
   await context.setOffline(true);
-  const page = await context.newPage();
+  const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+  const ready = () => page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('点击 ↑'));
+  const complete = () => page.waitForFunction(() => /本地回环完成|引擎已完成/.test(document.getElementById('composer-status').textContent));
   try {
-    await page.goto(origin + '/index.html');
-    await page.waitForFunction(() => document.getElementById('status').textContent.includes('已就绪'));
-    await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('点击 ↑'));
-    await page.locator('#message').fill('愿一切安好'); await page.locator('#cycles').selectOption('3');
-    await page.locator('#launch').click();
-    await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('本地回环完成'));
-    assert.equal(await page.locator('#composer-pass').textContent(), '3 / 3'); count++;
-    const sessionDownloadPromise = page.waitForEvent('download'); await page.locator('#composer-export').click();
-    const sessionDownload = await sessionDownloadPromise;
-    const session = JSON.parse(fs.readFileSync(await sessionDownload.path(), 'utf8'));
-    assert.equal(session.verifiedBytes, Buffer.byteLength('愿一切安好') * 3); assert.equal(session.networkSent, false); count++;
-    await page.locator('.route-settings > summary').click();
+    await page.goto(origin + '/index.html'); await ready();
+    check(await page.locator('#advanced-workbench, #files, #start, #send, .workspace').count(), 0);
+    check(await page.locator('#cycles').getAttribute('type'), 'checkbox');
+    check(await page.locator('#composer-settings').isVisible(), false);
+    await page.locator('#open-settings').click(); check(await page.locator('#composer-settings').isVisible(), true);
+    await page.locator('#rate-local').fill('4');
     await page.locator('#origin-lat').fill('31.23'); await page.locator('#origin-lon').fill('121.47'); await page.locator('#set-origin').click();
     assert.match(await page.locator('#location-summary').textContent(), /31.230/); count++;
-    await page.locator('.route-settings > summary').click();
-    await page.locator('#composer-files').setInputFiles({ name: 'ripple.txt', mimeType: 'text/plain', buffer: Buffer.alloc(1024 * 1024) });
-    await page.locator('#cycles').selectOption('100'); await page.locator('#launch').click();
-    await page.waitForFunction(() => document.getElementById('earth').dataset.operation === 'running');
+    await page.locator('#open-settings').click();
+    await page.locator('#message').fill('愿一切安好');
+    await page.locator('#composer-files').setInputFiles([{ name: '<img onerror=alert(1)>.txt', mimeType: 'text/plain', buffer: Buffer.alloc(4096, 65) }, { name: 'empty.txt', mimeType: 'text/plain', buffer: Buffer.alloc(0) }]);
+    check(await page.locator('#composer-file-list img').count(), 0);
+    const started = Date.now(); await page.locator('#launch').click(); await complete();
+    assert.ok(Date.now() - started >= 850, '4 KiB/s must pace 4 KiB payload'); count++;
+    const downloadPromise = page.waitForEvent('download'); await page.locator('#composer-export').click();
+    const report = JSON.parse(fs.readFileSync(await (await downloadPromise).path(), 'utf8'));
+    check(report.verifiedBytes, 4096 + Buffer.byteLength('愿一切安好')); check(report.completedPasses, 1); check(report.networkSent, false);
+    const rejected = await page.evaluate(async () => {
+      const rust = await import('./pkg/dandelion_web_adapter.js');
+      const frame = rust.encode_packet(new Uint8Array([1, 2]), new Uint8Array(16), 0, 0, true); let rejected = 0;
+      for (const bad of [frame.slice(0, 20), new Uint8Array(2000), new Uint8Array([...frame, 0])]) { try { rust.verify_packet(bad); } catch { rejected++; } }
+      frame[80] ^= 1; try { rust.verify_packet(frame); } catch { rejected++; } return rejected;
+    }); check(rejected, 4);
+    await page.locator('#clear-composer').click(); await page.locator('#message').fill('continuous'); await page.locator('#cycles').check(); await page.locator('#launch').click();
+    await page.waitForFunction(() => parseInt(document.getElementById('composer-pass').textContent) >= 4);
+    check(await page.locator('#stop-composer').isVisible(), true);
+    assert.match(await page.locator('#composer-pass').textContent(), /∞/); count++;
     await page.screenshot({ path: 'miniapp-ui-globe-running.png', fullPage: true });
-    await page.locator('#stop-composer').click();
-    assert.match(await page.locator('#composer-status').textContent(), /已停止/); assert.equal(await page.locator('#composer-export').isDisabled(), true); count++;
-    await page.locator('#mode').selectOption('global'); await page.locator('#launch').click();
+    await page.locator('#stop-composer').click(); check(await page.locator('#launch').isVisible(), true);
+    await page.locator('#open-settings').click(); await page.locator('#rate-local').fill('0'); await page.locator('#open-settings').click();
+    await page.locator('#launch').click(); await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('速度请输入'));
+    check(await page.locator('#stop-composer').isVisible(), false);
+    await page.locator('#open-settings').click(); await page.locator('#rate-local').fill('1024'); await page.locator('#open-settings').click();
+    await page.locator('#mode').selectOption('global'); await page.locator('#message').fill('offline must not send'); await page.locator('#launch').click();
     await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('尚未安装'));
-    assert.notEqual(await page.locator('#earth').getAttribute('data-operation'), 'running'); count++;
-    await page.locator('#mode').selectOption('local'); await page.locator('#cycles').selectOption('1');
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.locator('#message').fill('mobile Rust'); await page.locator('#launch').click();
-    await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('本地回环完成'));
+    check(await page.locator('#earth').getAttribute('data-operation'), 'idle');
+    await page.locator('#mode').selectOption('local'); await page.locator('#cycles').uncheck();
+    await page.locator('#composer-files').setInputFiles(Array.from({ length: 129 }, (_, i) => ({ name: 'item-' + i, mimeType: 'text/plain', buffer: Buffer.from('x') })));
+    assert.match(await page.locator('#composer-status').textContent(), /超出限制/); count++;
+    await page.reload(); await ready(); check(await page.locator('#composer-file-list li').count(), 0);
+    await page.setViewportSize({ width: 390, height: 844 }); await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.locator('#open-settings').click(); check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: 'miniapp-ui-settings-mobile.png', fullPage: true });
+    await page.locator('#open-settings').click(); await page.locator('#message').fill('mobile Rust'); await page.locator('#launch').click(); await complete();
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const pixel = await page.evaluate(() => { const gl = document.getElementById('earth').getContext('webgl'); const p = new Uint8Array(4); gl.readPixels(gl.drawingBufferWidth / 2, gl.drawingBufferHeight / 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, p); return p[3]; });
+    assert.ok(pixel > 0, 'real WebGL sphere'); count++;
     await page.screenshot({ path: 'miniapp-ui-globe-mobile.png', fullPage: true });
-    const overflow = await page.evaluate(() => [...document.querySelectorAll('body *')].filter(node => node.getBoundingClientRect().right > innerWidth + 1).map(node => ({ tag: node.tagName, id: node.id, class: node.className, right: node.getBoundingClientRect().right })).slice(0, 12));
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, JSON.stringify(overflow)); count++;
-    const pixels = await page.evaluate(() => { const gl = document.getElementById('earth').getContext('webgl'); if (!gl) return 0; const pixel = new Uint8Array(4); gl.readPixels(gl.drawingBufferWidth / 2, gl.drawingBufferHeight / 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel); return pixel[3]; });
-    assert.ok(pixels > 0, 'real WebGL sphere must render'); count++;
-    await page.screenshot({ path: 'miniapp-ui-globe-mobile.png', fullPage: true });
-    await page.setViewportSize({ width: 1180, height: 1000 });
-    await page.screenshot({ path: 'miniapp-ui-globe-desktop.png', fullPage: true });
-    await page.locator('#advanced-workbench > summary').click();
-    assert.equal(await page.locator('#start').isDisabled(), true); count++;
-    await page.locator('#files').setInputFiles([{ name: '<img onerror=alert(1)>.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') }, { name: 'empty.txt', mimeType: 'text/plain', buffer: Buffer.alloc(0) }]);
-    assert.equal(await page.locator('#selection img').count(), 0); count++;
-    await page.locator('#start').click();
-    await page.waitForFunction(() => document.getElementById('status').textContent.includes('本地校验完成'));
-    assert.equal(await page.locator('#file-count').textContent(), '2');
-    assert.equal(await page.locator('#packet-count').textContent(), '2'); count++;
-    const downloadPromise = page.waitForEvent('download'); await page.locator('#export').click();
-    const download = await downloadPromise;
-    const report = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
-    assert.equal(report.networkSent, false); assert.equal(report.verifiedBytes, 5); assert.equal(report.status, 'complete'); count++;
-    const negative = await page.evaluate(async () => {
-      const codec = await import('./pkg/dandelion_web_adapter.js');
-      const frame = codec.encode_packet(new Uint8Array([1, 2, 3]), new Uint8Array(16), 3, 0, true);
-      let rejects = 0;
-      for (const bad of [frame.slice(0, 20), new Uint8Array(2000), new Uint8Array([...frame, 0])]) {
-        try { codec.verify_packet(bad); } catch { rejects++; }
-      }
-      frame[80] ^= 1; try { codec.verify_packet(frame); } catch { rejects++; }
-      return rejects;
-    });
-    assert.equal(negative, 4); count++;
-    await page.locator('#files').setInputFiles({ name: 'large.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc(1024 * 1024) });
-    await page.locator('#start').click(); await page.locator('#cancel').click();
-    await page.waitForFunction(() => document.getElementById('status').textContent.includes('已取消'));
-    assert.equal(await page.locator('#export').isDisabled(), true); count++;
-    await page.locator('#files').setInputFiles({ name: 'next.txt', mimeType: 'text/plain', buffer: Buffer.from('next') });
-    await page.locator('#start').click();
-    await page.waitForFunction(() => document.getElementById('status').textContent.includes('本地校验完成')); count++;
-    await page.locator('details.card > summary').click();
-    await page.locator('#remember').check(); await page.locator('#clear').click();
-    assert.equal(await page.locator('#remember').isChecked(), false); count++;
-    await page.reload();
-    await page.waitForFunction(() => document.getElementById('status').textContent.includes('已就绪'));
-    assert.equal(await page.locator('#selection li').count(), 0); count++;
-    await page.locator('#advanced-workbench > summary').click();
-    assert.deepEqual(external, []); count++;
-    await page.locator('#files').setInputFiles(Array.from({ length: 129 }, (_, i) => ({ name: `file-${i}.txt`, mimeType: 'text/plain', buffer: Buffer.from('x') })));
-    assert.equal(await page.locator('#start').isDisabled(), true);
-    assert.match(await page.locator('#selection-summary').textContent(), /超出限制/); count++;
-    await page.screenshot({ path: 'miniapp-ui.png', fullPage: true });
-    await page.emulateMedia({ colorScheme: 'dark' });
-    await page.screenshot({ path: 'miniapp-ui-dark.png', fullPage: true });
-    await page.setViewportSize({ width: 390, height: 844 });
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); count++;
-    await page.screenshot({ path: 'miniapp-ui-narrow.png', fullPage: true });
-    // UI fixture only: installed native execution is verified in Fabushi Host CI.
+    await page.setViewportSize({ width: 1180, height: 1000 }); await page.screenshot({ path: 'miniapp-ui-globe-desktop.png', fullPage: true });
+    // Native transport below is a UI fixture, not real Internet delivery.
     await context.addInitScript(() => {
-      globalThis.__fixtureCalls = [];
+      globalThis.__calls = []; globalThis.__count = 0;
       globalThis.fabushi = { invoke: async (tool, args) => {
-        globalThis.__fixtureCalls.push({ tool, args });
-        if (tool === 'transfer.send') { globalThis.__statusCount = 0; if (globalThis.__rejectSend) return { ok: false, error: { message: 'fixture-send-denied' } }; }
-        const data = tool === 'offline.capabilities'
-          ? { contract: 'fabushi.miniapp.tools.v1', platform: 'desktop', capabilities: ['offline', 'selection', 'scan', 'transfer', 'config', 'state', 'compat'], targetPools: [{ id: 'configured', label: 'Authorized fixture' }, { id: 'lan', label: 'LAN fixture' }] }
-          : tool === 'selection.pick' ? { selectionId: 'fixture-root', entries: [{ name: 'fixture', size: 7 }] }
-          : tool === 'scan.metadata' ? { regular_files: 2, total_file_bytes: 7, payload_bytes_read: 0 }
-          : tool === 'scan.read' ? { files_completed: 2, verified_payload_bytes: 7 }
-          : tool === 'selection.compose' ? { selectionId: 'fixture-composed', entries: [{ name: 'text', size: 7 }] }
-          : tool === 'transfer.send' ? { operationId: 'fixture-send' }
-          : tool === 'transfer.receive' ? { operationId: 'fixture-receive' }
-          : tool === 'transfer.status' ? (globalThis.__statusCount++ === 0 ? { state: 'running', progress: { sequence: 1, pass_chunks_sent: 1, pass_verified_payload_bytes: 7 } } : { state: 'complete', result: { verified_payload_bytes: 7, chunks_sent: 1 } })
-          : { imported: true };
+        globalThis.__calls.push({ tool, args });
+        if (tool === 'transfer.send') { globalThis.__count = 0; if (globalThis.__deny) return { ok: false, error: { message: 'fixture-send-denied' } }; }
+        const data = tool === 'offline.capabilities' ? { platform: 'desktop', capabilities: ['selection', 'transfer', 'config'], targetPools: [{ id: 'configured', label: 'Authorized receiver' }, { id: 'lan', label: 'Authorized LAN' }] }
+          : tool === 'selection.compose' ? { selectionId: 'fixture-selection', entries: [] }
+          : tool === 'transfer.send' ? { operationId: 'fixture-operation' }
+          : tool === 'transfer.status' ? (globalThis.__count++ === 0 || globalThis.__continuous ? { state: 'running', progress: { sequence: globalThis.__count, pass_chunks_sent: 1, pass_verified_payload_bytes: 7 } } : { state: 'complete', result: { verified_payload_bytes: 7, chunks_sent: 1 } }) : { imported: true };
         return { ok: true, data };
       } };
     });
-    await page.reload();
-    await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('点击 ↑'));
-    await page.locator('#mode').selectOption('hotspot');
-    await page.waitForFunction(() => document.getElementById('composer-target').value === 'lan');
-    await page.locator('#message').fill('LAN fixture'); await page.locator('#launch').click();
-    await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('引擎已完成'));
-    const invocation = await page.evaluate(() => globalThis.__fixtureCalls.find(c => c.tool === 'transfer.send'));
-    assert.equal(invocation.args.targetPoolId, 'lan'); assert.equal(invocation.args.selectionId, 'fixture-composed'); count++;
-    assert.equal(await page.locator('#composer-bytes').textContent(), '7 B'); count++;
-    await page.locator('#mode').selectOption('global');
+    await page.reload(); await ready(); await page.locator('#mode').selectOption('global');
     await page.waitForFunction(() => document.getElementById('composer-target').value === 'configured');
-    await page.locator('.route-settings > summary').click();
+    await page.locator('#open-settings').click(); await page.locator('#rate-global').fill('7');
     for (const [id, value] of [['origin-lat', '31.23'], ['origin-lon', '121.47'], ['destination-lat', '37.77'], ['destination-lon', '-122.42']]) await page.locator('#' + id).fill(value);
-    await page.locator('#set-origin').click(); await page.locator('.route-settings > summary').click();
-    await page.locator('#message').fill('global fixture'); await page.locator('#launch').click();
-    await page.waitForFunction(() => document.getElementById('earth').dataset.operation === 'running');
-    await page.screenshot({ path: 'miniapp-ui-global-fixture.png', fullPage: true });
-    await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('引擎已完成'));
-    assert.equal(await page.locator('#earth').getAttribute('data-operation'), 'confirmed'); count++;
-    await page.evaluate(() => { globalThis.__rejectSend = true; });
-    await page.locator('#launch').click();
+    await page.locator('#set-origin').click(); await page.locator('#import-config').click();
+    await page.waitForFunction(() => document.getElementById('settings-status').textContent.includes('已导入'));
+    await page.locator('#open-settings').click(); await page.locator('#message').fill('authorized global fixture'); await page.locator('#launch').click(); await complete();
+    const send = await page.evaluate(() => globalThis.__calls.find(c => c.tool === 'transfer.send').args);
+    check(send.rateBytesPerSecond, 7 * 1024); check(send.repeat, 1); check(send.targetPoolId, 'configured');
+    check(await page.locator('#earth').getAttribute('data-operation'), 'confirmed');
+    await page.evaluate(() => { globalThis.__deny = true; }); await page.locator('#launch').click();
     await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('fixture-send-denied'));
-    assert.equal(await page.locator('#earth').getAttribute('data-operation'), 'idle'); count++;
-    await page.evaluate(() => { globalThis.__rejectSend = false; });
-
-    await page.locator('#advanced-workbench > summary').click();
-    await page.locator('#pick-root').waitFor({ state: 'visible' });
-    await page.locator('#pick-root').click();
-    await page.locator('#scan-metadata').click();
-    await page.waitForFunction(() => document.getElementById('scan-status').textContent.includes('2 个文件 · 7 B')); count++;
-    await page.locator('#scan-read').click();
-    await page.waitForFunction(() => document.getElementById('scan-status').textContent.includes('2 个文件 · 7 B')); count++;
-    await page.locator('#receive').click();
-    await page.waitForFunction(() => document.getElementById('transfer-status').textContent.includes('接收完成，已校验 7 B')); count++;
-    assert.equal(await page.locator('#send').isEnabled(), true); count++;
-    await page.locator('[data-native-tool="state.import"]').click();
-    await page.waitForFunction(() => document.getElementById('advanced-status').textContent.includes('imported')); count++;
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); count++;
+    check(await page.locator('#earth').getAttribute('data-operation'), 'idle');
+    await page.evaluate(() => { globalThis.__deny = false; globalThis.__continuous = true; globalThis.__calls = []; });
+    await page.locator('#mode').selectOption('hotspot'); await page.locator('#cycles').check(); await page.locator('#message').fill('LAN fixture'); await page.locator('#launch').click();
+    await page.waitForFunction(() => document.getElementById('earth').dataset.operation === 'running');
+    const looping = await page.evaluate(() => globalThis.__calls.find(c => c.tool === 'transfer.send').args);
+    check(looping.watch, true); check(looping.targetPoolId, 'lan'); check(Object.hasOwn(looping, 'repeat'), false);
+    check(looping.rateBytesPerSecond, 1024 * 1024);
+    await page.locator('#stop-composer').click(); check(await page.evaluate(() => globalThis.__calls.some(c => c.tool === 'transfer.cancel')), true);
+    check(external, []); check(errors, []);
     await page.screenshot({ path: 'miniapp-ui-native-narrow.png', fullPage: true });
-    console.log(JSON.stringify({ tests: count, source: process.env.TESTED_COMMIT, result: 'pass', scope: 'offline-and-native-ui-fixture-not-Fabushi-installed-acceptance' }));
-  } finally { await context.close(); await instance.close(); }
-}
-browser.catch(error => { console.error(error); process.exitCode = 1; });
+    console.log(JSON.stringify({ tests: count, source: process.env.TESTED_COMMIT, result: 'pass', scope: 'real-Wasm-WebGL-and-native-UI-fixture-not-installed-acceptance' }));
+  } finally { await context.close(); await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

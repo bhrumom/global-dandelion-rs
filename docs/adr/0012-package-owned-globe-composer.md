@@ -21,3 +21,7 @@ authorize discovered devices. Rings visualize activity; receipt verification is
 separate. Same web package on mobile proves only shared Wasm/UI until the installed
 mobile host can execute the package-owned native transport under its ordinary
 permission policy. Do not silently move Dandelion into a mobile Host binary.
+
+2026-10-22: remove the legacy document UI. Use one Rust watch process for
+continuous mode, bounded streaming progress, and existing validated rate flags.
+Keep target authorization unchanged. See GC08..10.

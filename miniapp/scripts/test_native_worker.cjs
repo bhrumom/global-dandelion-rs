@@ -77,6 +77,14 @@ const { randomUUID } = require('node:crypto');
     await call('selection.release', { selectionId: composed.data.selectionId });
     for (let i = 0; i < 30; i++) { status = await call('transfer.status', { operationId: textSend.data.operationId }); if (status.data.state !== 'running') break; await new Promise(resolve => setTimeout(resolve, 100)); }
     assert.equal(status.data.state, 'complete'); assert.equal(status.data.result.verified_payload_bytes, 2 * (Buffer.byteLength('actual native payload') + Buffer.byteLength('hello Rust')));
+    const continuous = await call('transfer.send', { selectionId: individual.data.selectionId, targetPoolId: 'loopback', watch: true, intervalMs: 100, rateBytesPerSecond: 1024 });
+    assert.equal(continuous.ok, true);
+    await new Promise(resolve => setTimeout(resolve, 1300));
+    const watching = await call('transfer.status', { operationId: continuous.data.operationId });
+    assert.equal(watching.data.state, 'running');
+    assert.ok(watching.data.progress?.sequence >= 1);
+    assert.equal((await call('transfer.cancel', { operationId: continuous.data.operationId })).ok, true);
+    assert.equal((await call('transfer.status', { operationId: continuous.data.operationId })).data.state, 'cancelled');
     await call('selection.release', { selectionId: individual.data.selectionId });
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.deepEqual((await readdir(path.join(privateData, 'state'))).filter(name => name.startsWith('selection-')), []);

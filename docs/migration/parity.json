@@ -380,7 +380,7 @@
       ],
       "verification_scope": "current-ci",
       "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation.",
-      "ui_extension": "Globe composer: explicit local UDP override / LAN-only authorized mTLS filtering; Rust/Wasm packet loopback is separately labelled. Mobile native/install proof remains pending."
+      "ui_extension": "Globe composer GC08..10: continuous watch, independent speed settings, composer-only UI; explicit local UDP override / LAN-only authorized mTLS filtering; Rust/Wasm packet loopback is separately labelled. Mobile native/install proof remains pending."
     },
     {
       "id": "loopback-receive",
@@ -448,7 +448,7 @@
       ],
       "verification_scope": "current-ci",
       "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation.",
-      "ui_extension": "Globe composer: explicit local UDP override / LAN-only authorized mTLS filtering; Rust/Wasm packet loopback is separately labelled. Mobile native/install proof remains pending."
+      "ui_extension": "Globe composer GC08..10: continuous watch, independent speed settings, composer-only UI; explicit local UDP override / LAN-only authorized mTLS filtering; Rust/Wasm packet loopback is separately labelled. Mobile native/install proof remains pending."
     },
     {
       "id": "startup-drive-scan",

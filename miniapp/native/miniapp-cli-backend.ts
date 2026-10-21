@@ -10,6 +10,7 @@
  */
 import { spawn } from "node:child_process";
 import { stageFiles } from "./staging.js";
+import { ProgressStream } from "./progress-stream.js";
 import { randomUUID } from "node:crypto";
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
@@ -93,6 +94,8 @@ function defaultSpawn(binaryPath: string, configPath: string): MiniAppSpawnPort 
       env: { PATH: "/usr/local/bin:/usr/bin:/bin", LC_ALL: "C", DANDELION_LOG: "warn" },
     });
     let stdout = "", stderr = "", stdoutBytes = 0, stderrBytes = 0;
+    const progress = argv.includes("--progress-json") ? new ProgressStream() : null;
+    const output = () => progress ? progress.snapshot() : stdout;
     let exceeded = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
     let settled = false;
@@ -102,6 +105,10 @@ function defaultSpawn(binaryPath: string, configPath: string): MiniAppSpawnPort 
       killTimer = setTimeout(() => { if (!settled) child.kill("SIGKILL"); }, 3000);
     };
     child.stdout.on("data", (chunk: Buffer) => {
+      if (progress) {
+        try { progress.push(chunk); } catch { exceeded = true; kill(); }
+        return;
+      }
       stdoutBytes += chunk.length;
       if (stdoutBytes > 1_048_576) { exceeded = true; kill(); }
       else stdout += chunk.toString("utf8");
@@ -112,14 +119,14 @@ function defaultSpawn(binaryPath: string, configPath: string): MiniAppSpawnPort 
       else stderr += chunk.toString("utf8");
     });
     const done = new Promise<{ code: number; stdout: string; stderr: string }>((settle) => {
-      child.on("error", (error) => settle({ code: -1, stdout, stderr: String(error.message) }));
+      child.on("error", (error) => settle({ code: -1, stdout: output(), stderr: String(error.message) }));
       child.on("close", (code) => {
         settled = true;
         if (killTimer) clearTimeout(killTimer);
-        settle({ code: exceeded ? -2 : code ?? -1, stdout, stderr });
+        settle({ code: exceeded ? -2 : code ?? -1, stdout: output(), stderr });
       });
     });
-    return { done, kill, snapshot: () => stdout };
+    return { done, kill, snapshot: output };
   };
 }
 
@@ -217,13 +224,13 @@ export function createDandelionCliBackend(
     return record.root;
   };
 
-  const admit = (argv: readonly string[]): NativeRun => {
+  const admit = (argv: readonly string[], continuous = false): NativeRun => {
     if (active.size >= MAX_OPERATIONS) throw new Error("NATIVE_OPERATION_LIMIT");
     const handle = spawnCommand(argv);
     const run: NativeRun = { handle, result: handle.done, cancelled: false, timedOut: false };
     active.add(run);
-    const timer = setTimeout(() => { run.timedOut = true; handle.kill(); }, timeoutMs);
-    run.result = handle.done.finally(() => { clearTimeout(timer); active.delete(run); });
+    const timer = continuous ? null : setTimeout(() => { run.timedOut = true; handle.kill(); }, timeoutMs);
+    run.result = handle.done.finally(() => { if (timer) clearTimeout(timer); active.delete(run); });
     return run;
   };
 
@@ -291,7 +298,7 @@ export function createDandelionCliBackend(
     pruneOperations();
     if (operations.size >= MAX_OPERATIONS) throw new Error("NATIVE_OPERATION_LIMIT");
     const operationId = randomUUID();
-    const run = admit(argv);
+    const run = admit(argv, mode === "send" && argv.includes("--watch"));
     const operation: Operation = { run, state: "running", mode };
     operations.set(operationId, operation);
     void finish(run, mode).then((result) => {

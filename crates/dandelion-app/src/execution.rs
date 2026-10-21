@@ -261,7 +261,9 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
             let child = ui_cancel.clone();
             progress_tasks.spawn(async move {
                 let mut timer = tokio::time::interval(Duration::from_secs(1));
-                for sample in 0..1800 {
+                let mut sample = 0u64;
+                loop {
+                    sample = sample.saturating_add(1);
                     tokio::select! {
                         biased;
                         _ = child.cancelled() => break,
@@ -271,7 +273,7 @@ pub fn run(validated: ValidatedConfig, options: RunOptions) -> Result<Snapshot> 
                             if changed && snapshot.chunks_sent > 0 {
                                 crate::output::json(&serde_json::json!({
                                     "event": "progress",
-                                    "sequence": sample + 1,
+                                    "sequence": sample,
                                     "pass_verified_payload_bytes": snapshot.verified_payload_bytes,
                                     "pass_chunks_sent": snapshot.chunks_sent,
                                     "pass_files_completed": snapshot.files_completed,
@@ -325,7 +327,7 @@ async fn service(
 ) -> Result<Snapshot> {
     let started = Instant::now();
     let mut total = Snapshot::default();
-    let mut cycles = 0u32;
+    let mut cycles = 0u64;
     let mut last_mounts = Vec::new();
     let mut rate = dandelion_pacing::TokenBucket::new(
         config.pacing.bytes_per_second,
@@ -455,7 +457,9 @@ async fn service(
         }
         total.status = stats.status;
         cycles += 1;
-        if total.status != RunStatus::Completed || (!options.watch && cycles >= options.repeat) {
+        if total.status != RunStatus::Completed
+            || (!options.watch && cycles >= u64::from(options.repeat))
+        {
             break;
         }
         tokio::select! {biased;
