@@ -112,6 +112,7 @@ async function awaitBrowser() {
       globalThis.__fixtureCalls = [];
       globalThis.fabushi = { invoke: async (tool, args) => {
         globalThis.__fixtureCalls.push({ tool, args });
+        if (tool === 'transfer.send') { globalThis.__statusCount = 0; if (globalThis.__rejectSend) return { ok: false, error: { message: 'fixture-send-denied' } }; }
         const data = tool === 'offline.capabilities'
           ? { contract: 'fabushi.miniapp.tools.v1', platform: 'desktop', capabilities: ['offline', 'selection', 'scan', 'transfer', 'config', 'state', 'compat'], targetPools: [{ id: 'configured', label: 'Authorized fixture' }, { id: 'lan', label: 'LAN fixture' }] }
           : tool === 'selection.pick' ? { selectionId: 'fixture-root', entries: [{ name: 'fixture', size: 7 }] }
@@ -120,7 +121,7 @@ async function awaitBrowser() {
           : tool === 'selection.compose' ? { selectionId: 'fixture-composed', entries: [{ name: 'text', size: 7 }] }
           : tool === 'transfer.send' ? { operationId: 'fixture-send' }
           : tool === 'transfer.receive' ? { operationId: 'fixture-receive' }
-          : tool === 'transfer.status' ? { state: 'complete', result: { verified_payload_bytes: 7 } }
+          : tool === 'transfer.status' ? (globalThis.__statusCount++ === 0 ? { state: 'running', progress: { sequence: 1, pass_chunks_sent: 1, pass_verified_payload_bytes: 7 } } : { state: 'complete', result: { verified_payload_bytes: 7, chunks_sent: 1 } })
           : { imported: true };
         return { ok: true, data };
       } };
@@ -134,6 +135,22 @@ async function awaitBrowser() {
     const invocation = await page.evaluate(() => globalThis.__fixtureCalls.find(c => c.tool === 'transfer.send'));
     assert.equal(invocation.args.targetPoolId, 'lan'); assert.equal(invocation.args.selectionId, 'fixture-composed'); count++;
     assert.equal(await page.locator('#composer-bytes').textContent(), '7 B'); count++;
+    await page.locator('#mode').selectOption('global');
+    await page.waitForFunction(() => document.getElementById('composer-target').value === 'configured');
+    await page.locator('.route-settings > summary').click();
+    for (const [id, value] of [['origin-lat', '31.23'], ['origin-lon', '121.47'], ['destination-lat', '37.77'], ['destination-lon', '-122.42']]) await page.locator('#' + id).fill(value);
+    await page.locator('#set-origin').click(); await page.locator('.route-settings > summary').click();
+    await page.locator('#message').fill('global fixture'); await page.locator('#launch').click();
+    await page.waitForFunction(() => document.getElementById('earth').dataset.operation === 'running');
+    await page.screenshot({ path: 'miniapp-ui-global-fixture.png', fullPage: true });
+    await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('引擎已完成'));
+    assert.equal(await page.locator('#earth').getAttribute('data-operation'), 'confirmed'); count++;
+    await page.evaluate(() => { globalThis.__rejectSend = true; });
+    await page.locator('#launch').click();
+    await page.waitForFunction(() => document.getElementById('composer-status').textContent.includes('fixture-send-denied'));
+    assert.equal(await page.locator('#earth').getAttribute('data-operation'), 'idle'); count++;
+    await page.evaluate(() => { globalThis.__rejectSend = false; });
+
     await page.locator('#advanced-workbench > summary').click();
     await page.locator('#pick-root').waitFor({ state: 'visible' });
     await page.locator('#pick-root').click();

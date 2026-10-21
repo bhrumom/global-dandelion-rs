@@ -180,6 +180,7 @@ export async function mountComposer(rust, host) {
   $('launch').onclick = async () => {
     if (busy || !rust) return;
     busy = true; report = null; const ticket = ++epoch, repeats = Number($('cycles').value), currentMode = mode();
+    globe.update({ active: false, confirmed: false, mode: currentMode });
     controls(); status(currentMode === 'local' ? '正在启动 Rust 本地回环…' : '正在请求安装包启动传输…'); $('composer-progress').value = 0; $('composer-packets').textContent = '0'; $('composer-bytes').textContent = '0 B'; $('composer-pass').textContent = `0 / ${repeats}`;
     try {
       if (currentMode === 'local' && !nativeLocal()) { globe.update({ active: true, mode: 'local', origin, confirmed: false }); $('globe-state').textContent = origin ? '本地回环 · 所在点波澜' : '本地回环 · 所在点未设置'; await localRun(ticket, repeats, $('message').value); }

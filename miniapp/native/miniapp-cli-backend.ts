@@ -5,8 +5,8 @@
  * argv arrays only (no shell). Every path handed to it must sit under a root
  * the Host authorized; the page can never name a path itself.
  *
- * Selections are directories on purpose: the engine's unit of work is a source
- * root, and accepting individual files would silently widen the sent set.
+ * The engine consumes roots. Explicit file selections are bounded private
+ * snapshots, preserving exactly the selected set instead of its parent folder.
  */
 import { spawn } from "node:child_process";
 import { stageFiles } from "./staging.js";
@@ -90,7 +90,7 @@ function defaultSpawn(binaryPath: string, configPath: string): MiniAppSpawnPort 
       shell: false,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { PATH: "/usr/local/bin:/usr/bin:/bin", LC_ALL: "C" },
+      env: { PATH: "/usr/local/bin:/usr/bin:/bin", LC_ALL: "C", DANDELION_LOG: "warn" },
     });
     let stdout = "", stderr = "", stdoutBytes = 0, stderrBytes = 0;
     let exceeded = false;
