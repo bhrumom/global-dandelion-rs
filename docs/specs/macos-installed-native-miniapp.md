@@ -57,7 +57,8 @@ App. Current priority is macOS. This supersedes Host-bundled engine composition.
 
 ## Packaging, failure and acceptance
 
-Offline 0.3.4 stays immutable; native macOS corrective version is 0.4.0.
+Offline 0.3.4 stays immutable; native macOS corrective version is 0.4.0. The user-requested globe update is
+0.4.1; retain 0.4.0 immutable and use the same descriptor, grants and signer.
 Other platforms retain their prior package and are not advertised as native.
 Unknown platform/descriptor/capability, bad signature/digest or denied native
 confirmation fails closed. Native denial does not create a process. Existing

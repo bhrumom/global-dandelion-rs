@@ -84,3 +84,8 @@ signer/review proof; unsigned CI resources are not installable releases.
 
 References: fabushi-miniapp.md; macos-installed-native-miniapp.md;
 native-apple-core.md; global-dandelion-rust-architecture.md; user sketch in chat.
+
+Mac update 2026-10-21: deliver immutable 0.4.1 through the protected managed
+signer and approved catalog, then update this Mac through the existing Host.
+No Host business code change or new permission scope. Verify installed version
+and actual globe UI separately from CI; retain user data and 0.4.0 rollback.

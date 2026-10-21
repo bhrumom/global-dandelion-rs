@@ -34,3 +34,7 @@ the cleanup assertion, where the fixture omitted fs readdir/symlink imports
 (test flaw). Preserve those proofs and correct the focused failures.
 Receipt progress is now a bounded opt-in Rust observer, separate from process
 admission; unchanged counters cannot keep a flying route animated indefinitely.
+
+User requested installation on this Mac. Release preparation now uses 0.4.1;
+0.4.0 remains reproducible and immutable. Same native-runtime grants and
+managed trust root; signing/catalog/install/live UI remain pending until observed.
