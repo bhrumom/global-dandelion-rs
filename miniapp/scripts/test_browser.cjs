@@ -74,6 +74,23 @@ const origin = 'https://global-dandelion.fixture.invalid';
     assert.ok(pixel > 0, 'real WebGL sphere'); count++;
     await page.screenshot({ path: 'miniapp-ui-globe-mobile.png', fullPage: true });
     await page.setViewportSize({ width: 1180, height: 1000 }); await page.screenshot({ path: 'miniapp-ui-globe-desktop.png', fullPage: true });
+    // Reproduce the installed Host policy: WebGL unavailable, real Canvas2D.
+    const software = await context.newPage(); software.on('pageerror', error => errors.push(error.message));
+    await software.addInitScript(() => {
+      const original = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(kind, ...args) { return /webgl|experimental-webgl/.test(kind) ? null : original.call(this, kind, ...args); };
+    });
+    await software.goto(origin + '/index.html');
+    await software.waitForFunction(() => document.getElementById('earth').dataset.renderer === 'software-3d' && document.getElementById('earth').getContext('2d').getImageData(400, 325, 1, 1).data[3] > 0);
+    check(await software.locator('#earth-fallback').isVisible(), false);
+    const beforeRotation = await software.locator('#earth').evaluate(canvas => canvas.toDataURL());
+    await software.locator('#earth').focus(); for (let i = 0; i < 5; i++) await software.keyboard.press('ArrowRight');
+    await software.waitForFunction(previous => document.getElementById('earth').toDataURL() !== previous, beforeRotation); count++;
+    await software.locator('#message').fill('software globe'); await software.locator('#cycles').check(); await software.locator('#launch').click();
+    await software.waitForFunction(() => parseInt(document.getElementById('composer-pass').textContent) >= 2);
+    check(await software.locator('#earth').getAttribute('data-operation'), 'running');
+    await software.locator('#stop-composer').click(); check(await software.locator('#earth').getAttribute('data-operation'), 'idle');
+    await software.screenshot({ path: 'miniapp-ui-software-globe.png', fullPage: true }); await software.close();
     // Native transport below is a UI fixture, not real Internet delivery.
     await context.addInitScript(() => {
       globalThis.__calls = []; globalThis.__count = 0;
