@@ -21,8 +21,9 @@ measurement of physical energy or proof of wireless radiation.
 
 - GC01: dark responsive globe-first layout follows sketch. Touch/drag rotation,
   accessible mode/repeat selectors, text input, + file picker, explicit start/stop,
-  status and bounded statistics. Keep existing advanced tools available behind
-  details. Touch targets >=44px, safe-area insets, reduced-motion and hidden-page
+  status and bounded statistics. Remove the legacy workbench from the document.
+  Settings above the composer contain speed, location and authorized targets.
+  Native diagnostic APIs remain. Touch targets >=44px, safe-area insets, reduced-motion and hidden-page
   pause, WebGL failure fallback. No persistent file/text/location data.
 - GC02: Rust generates finite bounded 3D sphere positions, elevated great-circle
   routes and on-sphere ripple geometry. Validate coordinates and counts, handle
@@ -32,7 +33,9 @@ measurement of physical energy or proof of wireless radiation.
   Rust GDAN v2 encode/decode and BLAKE3 verification on every pass, including empty
   files. When the installed package announces local native transport, the composer uses
   its actual Rust UDP loopback. Otherwise label the Web/Wasm path as in-memory
-  protocol loopback; this fallback is not full mobile native parity. Finite repeats 1..10000, session byte budget, cooperative pacing,
+  protocol loopback; this fallback is not full mobile native parity. Single pass or
+  continuous until stop/error/budget, without a repeat-count selector. Preserve native
+  lifetime network budgets; never auto-retry or reset budgets. Cooperative pacing,
   no overlapping work, cancellation generation fence and unload cleanup.
 - GC04: global sends only to configured authenticated targets through the installed
   package. Hotspot uses configured class=lan direct private-IP peers only (class=private
@@ -49,7 +52,7 @@ measurement of physical energy or proof of wireless radiation.
   Never invent the device location or derive peer locations from random IPs.
   User-entered endpoint map coordinates are display metadata, never authorization.
   An opt-in bounded NDJSON progress observer samples real Rust receipt counters
-  at most once per second (1800 samples), leaving default CLI JSON unchanged.
+  at most once per second until cancellation, retaining one current frame, leaving default CLI JSON unchanged.
   Flying trajectories require receipt-counter progress, not mere process admission.
   Routes require actual running/completed operation evidence plus known endpoints;
   distinguish active, confirmed, failed and cancelled. Stop visualization when
@@ -89,3 +92,25 @@ Mac update 2026-10-21: deliver immutable 0.4.1 through the protected managed
 signer and approved catalog, then update this Mac through the existing Host.
 No Host business code change or new permission scope. Verify installed version
 and actual globe UI separately from CI; retain user data and 0.4.0 rollback.
+
+## 2026-10-22 correction (0.4.2)
+
+GC08: looping is continuous, not 10000 passes. Native sending uses one cancellable
+Rust watch process without a fixed process-duration deadline. Ordinary commands
+retain timeouts. Keep bounded concurrency, frame/output memory, graceful stop,
+account/close cancellation and authorized lifetime traffic budgets. Progress has
+no sample-count stop and retains only its latest complete frame and final receipt.
+Wasm local loops validate counter overflow, source limits and cooperative pacing.
+
+GC09: settings above the input expose independent local/global/hotspot positive
+integer KiB/s speeds, converted to bytes/s for the Rust monotonic limiter. The
+Wasm fallback uses monotonic pacing. Settings are locked during operations.
+Configuration import and authorized targets remain accessible here; remove the
+duplicate legacy UI and its handlers rather than hiding it.
+
+GC10: global reach means authorized compatible receivers anywhere in the world.
+Keep mTLS, WAN opt-in and explicit target policy; do not enumerate or stream to
+arbitrary Internet IPs. Actions verify continuous cancellation, pacing, watch
+arguments, bounded long-stream retention, removed legacy DOM and mobile layout.
+0.4.2 retains package ownership and grants. 0.4.1 is immutable; signing/catalog
+and installed proof remain independent gates.

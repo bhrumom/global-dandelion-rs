@@ -2,7 +2,7 @@ import { createGlobe } from './globe.js';
 import { formatBytes } from './host-tools.js';
 
 const $ = id => document.getElementById(id);
-const MAX_BYTES = 1024 ** 3, MAX_PACKETS = 1_000_000;
+const MAX_BYTES = 1024 ** 3;
 export async function mountComposer(rust, host) {
   let pools = [], files = [], nativeSelection = null, nativeEntries = [], busy = false, epoch = 0, operation = null, origin = null, report = null, closed = false;
   const globe = rust ? createGlobe($('earth'), rust, text => { $('globe-state').textContent = text; $('earth-fallback').textContent = text; $('earth-fallback').hidden = false; }) : { update() {}, destroy() {} };
@@ -16,7 +16,7 @@ export async function mountComposer(rust, host) {
   };
   const controls = () => {
     $('launch').disabled = !rust || busy; $('launch').hidden = busy; $('stop-composer').hidden = !busy;
-    for (const id of ['mode', 'cycles', 'attach', 'message', 'clear-composer', 'set-origin', 'locate', 'composer-target', 'destination-lat', 'destination-lon']) $(id).disabled = busy;
+    for (const id of ['mode', 'cycles', 'attach', 'message', 'clear-composer', 'set-origin', 'locate', 'composer-target', 'destination-lat', 'destination-lon', 'rate-local', 'rate-global', 'rate-hotspot', 'import-config']) $(id).disabled = busy;
     $('composer-export').disabled = !report || busy;
   };
   const list = () => {
@@ -31,6 +31,24 @@ export async function mountComposer(rust, host) {
     const previous = nativeSelection; nativeSelection = null; nativeEntries = []; files = []; report = null;
     $('composer-files').value = ''; $('message').value = ''; $('composer-progress').value = 0; list(); controls();
     if (previous) await host.call('selection.release', { selectionId: previous });
+  };
+  const selectedRate = () => {
+    const input = $('rate-' + mode()), value = Number(input.value);
+    if (!input.value.trim() || !Number.isInteger(value) || value < 1 || value > 1048576) throw new Error('速度请输入 1 至 1048576 的整数，单位 KiB/s。');
+    return value * 1024;
+  };
+  $('open-settings').onclick = () => {
+    const open = $('composer-settings').hidden;
+    $('composer-settings').hidden = !open; $('open-settings').setAttribute('aria-expanded', String(open));
+  };
+  $('import-config').onclick = async () => {
+    if (busy) return;
+    busy = true; controls();
+    try {
+      const result = await host.call('config.import', {});
+      $('settings-status').textContent = result.ok ? '授权配置已导入。' : `导入未完成：${result.error.message}`;
+      await refreshPools();
+    } finally { busy = false; controls(); }
   };
   $('clear-composer').onclick = clear;
   $('composer-files').onchange = () => {
@@ -69,7 +87,7 @@ export async function mountComposer(rust, host) {
     globe.update({ mode: mode(), active: false, confirmed: false });
     $('globe-state').textContent = mode() === 'local' ? '本地转轮 · 就绪' : mode() === 'global' ? '全球发送 · 等待授权目标' : '热点场能 · 等待局域网目标';
     await refreshPools();
-    status(mode() === 'local' ? '文字和文件均留在本机；单次运行累计校验上限 1 GiB。' : '请确认目标配置后选择文件；缺少原生适配时不会启动传输。');
+    status(mode() === 'local' ? '文字和文件均留在本机；循环运行直到点击停止。' : '请确认目标配置后选择文件；缺少原生适配时不会启动传输。');
   };
   const coordinates = (latitude, longitude) => {
     if (!$(latitude).value.trim() || !$(longitude).value.trim()) return null;
@@ -99,7 +117,15 @@ export async function mountComposer(rust, host) {
     if (source.length > 128 || total > MAX_BYTES) throw new Error('文字和文件合计最多 128 项、1 GiB。');
     const summary = { schemaVersion: 1, mode: 'local', implementation: 'rust-gdan-v2', networkSent: false, status: 'running', requestedPasses: repeats, completedPasses: 0, verifiedBytes: 0, packets: 0, files: source.map(f => ({ name: f.name, bytes: f.size })) };
     const limit = rust.max_payload_bytes();
-    for (let pass = 0; pass < repeats; pass++) {
+    const rate = selectedRate(), started = performance.now();
+    const paced = async () => {
+      let remaining = started + summary.verifiedBytes * 1000 / rate - performance.now();
+      while (remaining > 1 && ticket === epoch) {
+        await pause(Math.min(remaining, 50));
+        remaining = started + summary.verifiedBytes * 1000 / rate - performance.now();
+      }
+    };
+    for (let pass = 0; repeats === null || pass < repeats; pass++) {
       if (ticket !== epoch) return;
       const identity = crypto.getRandomValues(new Uint8Array(16));
       for (let id = 0; id < source.length; id++) {
@@ -107,27 +133,29 @@ export async function mountComposer(rust, host) {
         do {
           if (ticket !== epoch) return;
           const length = Math.min(limit, file.size - offset);
-          if (summary.verifiedBytes + length > MAX_BYTES || summary.packets >= MAX_PACKETS) { summary.status = 'budget_exhausted'; report = summary; status('已达到本次运行预算，停止继续循环；已完成的校验可导出。'); return; }
+          if (!Number.isSafeInteger(summary.verifiedBytes + length) || !Number.isSafeInteger(summary.packets + 1)) { summary.status = 'budget_exhausted'; report = summary; status('计数器已达到安全上限，已停止；校验结果可导出。'); return; }
           const payload = new Uint8Array(await file.slice(offset, offset + limit).arrayBuffer());
           if (ticket !== epoch) return;
           const verified = rust.verify_packet(rust.encode_packet(payload, identity, id, index, offset + payload.length === file.size));
           if (verified.length !== payload.length || verified.some((byte, i) => byte !== payload[i])) throw new Error('Rust 包回环校验失败。');
           offset += payload.length; index++; summary.packets++; summary.verifiedBytes += payload.length;
           $('composer-bytes').textContent = formatBytes(summary.verifiedBytes); $('composer-packets').textContent = String(summary.packets);
-          $('composer-progress').value = (pass + (total ? (source.slice(0, id).reduce((n, f) => n + f.size, 0) + offset) / total : (id + 1) / source.length)) / repeats;
-          if (summary.packets % 64 === 0) { status(`本地转轮 ${pass + 1} / ${repeats} · ${file.name}`); await pause(0); }
+          $('composer-progress').value = ((repeats === null ? 0 : pass) + (total ? (source.slice(0, id).reduce((n, f) => n + f.size, 0) + offset) / total : (id + 1) / source.length)) / (repeats ?? 1);
+          await paced();
+          if (ticket !== epoch) return;
+          if (summary.packets % 64 === 0) { status(`本地转轮 ${pass + 1}${repeats === null ? ' · ∞' : ''} · ${file.name}`); await pause(0); }
         } while (offset < file.size);
       }
       if (ticket !== epoch) return;
-      summary.completedPasses++; $('composer-pass').textContent = `${summary.completedPasses} / ${repeats}`;
-      if (pass + 1 < repeats) await pause(250);
+      summary.completedPasses++; $('composer-pass').textContent = `${summary.completedPasses}${repeats === null ? ' · ∞' : ''}`;
+      if (repeats === null || pass + 1 < repeats) await pause(100);
     }
     summary.status = 'complete'; report = summary; $('composer-progress').value = 1; status(`本地回环完成 · ${repeats} 次 · Rust 已校验 ${formatBytes(summary.verifiedBytes)}，没有网络发送。`);
   }
   async function nativeRun(ticket, repeats, text) {
     if (!host.capabilities.has('transfer')) throw new Error('此平台尚未安装可执行原生传输的适配；不会用动画冒充发送。');
     const targetPoolId = nativeLocal() ? 'loopback' : $('composer-target').value;
-    if (!targetPoolId) throw new Error('请先在高级工具中导入已授权的目标与 mTLS 配置，然后重新选择模式。');
+    if (!targetPoolId) throw new Error('请点击输入框上方的设置，导入接收端与授权配置。');
     let sendSelection = nativeSelection, composedSelection = null;
     if (text) {
       const composed = await host.call('selection.compose', { text, ...(nativeSelection ? { selectionId: nativeSelection } : {}) });
@@ -137,7 +165,7 @@ export async function mountComposer(rust, host) {
     }
     if (!sendSelection) throw new Error('请输入文字或点击 ＋ 选择本次发送的文件。');
     if (closed || ticket !== epoch) { if (composedSelection) await host.call('selection.release', { selectionId: composedSelection }); return; }
-    const response = await host.call('transfer.send', { selectionId: sendSelection, targetPoolId, repeat: repeats });
+    const response = await host.call('transfer.send', { selectionId: sendSelection, targetPoolId, rateBytesPerSecond: selectedRate(), ...(repeats === null ? { watch: true, intervalMs: 100 } : { repeat: 1 }) });
     if (composedSelection) await host.call('selection.release', { selectionId: composedSelection });
     if (!response.ok) throw new Error(response.error.message);
     if (typeof response.data?.operationId !== 'string' || !response.data.operationId) throw new Error('原生启动结果缺少操作标识，无法确认执行。');
@@ -172,17 +200,18 @@ export async function mountComposer(rust, host) {
       const receipt = state.result ?? {};
       report = { schemaVersion: 1, mode: mode(), status: 'complete', source: 'installed-rust-engine', receipt };
       $('composer-bytes').textContent = formatBytes(Number(receipt.verified_payload_bytes ?? 0)); $('composer-packets').textContent = String(receipt.chunks_sent ?? 0); $('composer-progress').value = 1;
-      $('composer-pass').textContent = `${repeats} / ${repeats}`;
+      $('composer-pass').textContent = repeats === null ? '∞' : '1';
       globe.update({ active: false, confirmed: Number(receipt.chunks_sent ?? 0) > 0 });
       status(`引擎已完成，实际校验 ${formatBytes(Number(receipt.verified_payload_bytes ?? 0))}。`); return;
     }
   }
   $('launch').onclick = async () => {
     if (busy || !rust) return;
-    busy = true; report = null; const ticket = ++epoch, repeats = Number($('cycles').value), currentMode = mode();
+    busy = true; report = null; const ticket = ++epoch, repeats = $('cycles').checked ? null : 1, currentMode = mode();
     globe.update({ active: false, confirmed: false, mode: currentMode });
-    controls(); status(currentMode === 'local' ? '正在启动 Rust 本地回环…' : '正在请求安装包启动传输…'); $('composer-progress').value = 0; $('composer-packets').textContent = '0'; $('composer-bytes').textContent = '0 B'; $('composer-pass').textContent = `0 / ${repeats}`;
+    controls(); status(currentMode === 'local' ? '正在启动 Rust 本地回环…' : '正在请求安装包启动传输…'); $('composer-progress').value = 0; $('composer-packets').textContent = '0'; $('composer-bytes').textContent = '0 B'; $('composer-pass').textContent = repeats === null ? '∞' : '0';
     try {
+      selectedRate();
       if (currentMode === 'local' && !nativeLocal()) { globe.update({ active: true, mode: 'local', origin, confirmed: false }); $('globe-state').textContent = origin ? '本地回环 · 所在点波澜' : '本地回环 · 所在点未设置'; await localRun(ticket, repeats, $('message').value); }
       else await nativeRun(ticket, repeats, $('message').value);
     } catch (error) { if (ticket === epoch) status(String(error.message ?? error)); }
