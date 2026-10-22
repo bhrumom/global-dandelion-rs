@@ -47,6 +47,7 @@ const { randomUUID } = require('node:crypto');
   try {
     const capabilities = await call('offline.capabilities');
     assert.equal(capabilities.ok, true);
+    assert.deepEqual(capabilities.data.features, ['link-download-v1']);
     for (const c of ['selection', 'scan', 'transfer', 'state', 'config', 'platform', 'diagnostics', 'update', 'compat']) assert.ok(capabilities.data.capabilities.includes(c));
     assert.ok(!capabilities.data.capabilities.includes('hotspot'));
     const selftest = await call('diagnostics.selfTest');
