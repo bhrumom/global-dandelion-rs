@@ -124,3 +124,8 @@ respect reduced motion, retain pointer/keyboard rotation and receipt-driven
 overlays. No textures/CDN/network or fake receipt animation. Test real Canvas2D
 with WebGL unavailable, pixels, rotation and lifecycle in Actions, then confirm
 the installed Mac separately. Preserve immutable 0.4.2 and existing native grants.
+
+2026-10-22 latest correction: automatic initialization/target onboarding and
+actual hotspot enable are now required; see automatic-network-onboarding.md.
+The previous existing-LAN-only scope is insufficient. These changes are pending
+implementation and must not be claimed as delivered by 0.4.3.
