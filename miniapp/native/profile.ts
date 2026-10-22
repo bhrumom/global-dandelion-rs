@@ -76,6 +76,7 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
       ...(remote && !managed && settings.transport.tls.peers.some(peer => peer.class === "lan") ? [{ id: "lan", label: "已授权热点／局域网设备" }] : [])];
   };
   const prepareAutomatic = () => bootstrapJob ??= (async () => {
+    if (process.env.DANDELION_OFFLINE === "1") { networkState = { state: "offline", message: "离线模式：本地回环可用", receivers: 0 }; return; }
     if (configPath !== defaultPath) { networkState = { state: "manual", message: "使用已导入的授权目标", receivers: settings.transport.tls.peers.length }; return; }
     let stdout = "", length = 0;
     try {

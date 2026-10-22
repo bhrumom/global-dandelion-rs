@@ -149,9 +149,15 @@ pub fn prepare(directory: &Path) -> Result<serde_json::Value> {
     if generations >= 8 {
         return Err(Error::Config("network generation limit; close previous Mini App instances and remove their owned stale profiles".into()));
     }
-    let staged = tempfile::Builder::new()
-        .prefix("network-generation-")
-        .tempdir_in(directory)?;
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("network-generation-");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(fs::Permissions::from_mode(0o700));
+    }
+    let staged = builder.tempdir_in(directory)?;
+    private_directory(staged.path())?;
     write(
         staged.path(),
         "ca.pem",
@@ -219,6 +225,9 @@ mod tests {
     #[test]
     fn identity_is_private_stable_and_rejects_symlinks() {
         let root = tempfile::tempdir().unwrap();
+        fs::set_permissions(root.path(), fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(private_directory(root.path()).is_err());
+        fs::set_permissions(root.path(), fs::Permissions::from_mode(0o700)).unwrap();
         private_directory(root.path()).unwrap();
         let first = identity(root.path()).unwrap();
         assert_eq!(first.id(), identity(root.path()).unwrap().id());
