@@ -14,8 +14,9 @@ manually import TOML for the normal flow. Existing profile import remains option
 Initialization does not read user files or start sending file payloads.
 
 AN02: user confirmed automatic discovery of compatible global receiving nodes.
-Do not generate arbitrary public IPs. The managed directory contains only
-operator-enrolled, consenting, compatible receiving nodes. For receiving nodes, discovery must bind identity, trust, endpoint, freshness and revocation;
+Do not generate arbitrary public IPs. The signed Mini App binary bundles only
+operator-enrolled, consenting, compatible receiver addresses and CA trust. No
+mandatory remote directory is required for startup discovery. For receiving nodes, discovery must bind identity, trust, endpoint, freshness and revocation;
 only verified reachable registered nodes become sendable. Discovery is bounded,
 cancellable and cannot silently publish a local listener to the Internet.
 
@@ -64,23 +65,26 @@ Apple documents selecting sharing source/output and Wi-Fi network/security;
 that guide does not establish a public unattended programmatic hotspot API.
 
 
-## Confirmed control plane implementation
+## Bundled receiver implementation
 
-A package-owned Rust network adapter fetches a bounded, expiring directory from
-one pinned canonical HTTPS origin (api.ombhrum.com), with no redirects. The
-managed directory authenticates the network CA and up to 32 exact receiver
-addresses/server names; no automatic DNS/IP expansion. The client generates its
-own private identity and CSR in Rust; only the CSR is sent to the managed
-certificate enrollment endpoint. The private key never leaves the app directory.
-The authority issues short-lived client-only certificates, replaces untrusted
-CSR extensions with fixed client policy, and rate-limits enrollment. No shared
-client key, trust-all verifier, production test identity or hardcoded node IP.
+A package-owned Rust adapter includes a bounded catalogue of up to 32 exact
+numeric receiver addresses/server names and their CA trust in the signed binary.
+No automatic DNS/IP expansion or mandatory remote directory lookup is allowed.
+The client generates its own private identity and CSR in Rust; only the CSR is
+sent to the pinned canonical HTTPS issuer at api.ombhrum.com, without redirects.
+The private key never leaves the app directory. The authority must issue
+short-lived client-only certificates, replace untrusted CSR extensions with a
+fixed client policy, and rate-limit enrollment. No shared client key, trust-all
+verifier, production test identity or fabricated address.
 
-Directory/control API and authority deployment belong to the service backend;
-packet/transport/identity/private profile logic belongs to the Mini App Rust
-package. Use existing GDAN v2, TLS 1.3 mutual authentication, receipts, pacing and
-lifetime budgets. A certificate/configuration file does not prove readiness;
-probe the selected receiver's authenticated protocol before exposing it as ready.
+Issuer deployment and managed receiver operations belong to the service backend;
+packet/transport/identity/catalogue/private profile logic belongs to the Mini App
+Rust package. Use existing GDAN v2, TLS 1.3 mutual authentication, receipts, pacing
+and lifetime budgets. A prepared configuration does not prove readiness: probe
+the selected receiver's authenticated protocol before exposing it as ready. A
+bounded local lease requires renewed probing after expiry. Compromised node trust
+must be removed through a signed package update; rapid revocation delivery and
+real certificate lifecycle deployment are still pending.
 
 Bootstrap is cancellable and bounded; initial local use must not wait for network
 availability. Never cancel user transfers merely because background discovery
@@ -89,13 +93,13 @@ capability set for the lifetime of the page. Failures show retry state and cause
 no indefinite model-driven retries. Existing manually configured profiles remain
 available as an advanced fallback, with no default requirement to import files.
 
-2026-10-22 infrastructure inspection: account device bhrum2 is online Linux
-ARM64. Root filesystem free 2210902016 bytes, required reserve 2366063412 bytes;
+2026-10-22 infrastructure inspection: account device bhrum2 was online Linux
+ARM64; a later connection attempt reported it offline. Root filesystem free 2210902016 bytes, required reserve 2366063412 bytes;
 64 MiB deployment preflight fails. No server files were written or removed.
 Implement/test in Actions; deployment must wait for restored reserve or another
 suitable source host, not consume the remaining disk or remove unrelated data.
 
-### User correction: receivers are bundled
+## Provisioning gate
 
 The latest user instruction makes the immutable receiver catalogue and its trust
 anchors part of the installed Mini App package. Startup must not require a remote
