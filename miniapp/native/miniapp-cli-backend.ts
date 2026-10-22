@@ -85,9 +85,9 @@ function insideRoot(root: string, target: string): boolean {
   return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel));
 }
 
-function defaultSpawn(binaryPath: string, configPath: string): MiniAppSpawnPort {
+function defaultSpawn(binaryPath: string, configPath: () => string): MiniAppSpawnPort {
   return (argv) => {
-    const child = spawn(binaryPath, ["--config", configPath, ...argv], {
+    const child = spawn(binaryPath, ["--config", configPath(), ...argv], {
       shell: false,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
@@ -153,7 +153,7 @@ export function createDandelionCliBackend(
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30 * 60_000) throw new Error("INVALID_NATIVE_TIMEOUT");
   const platform = config.platform ?? process.platform;
   const nativeCliSupported = platform === "linux" || platform === "darwin";
-  const spawnCommand = ports.spawn ?? defaultSpawn(config.binaryPath, config.configPath);
+  const spawnCommand = ports.spawn ?? defaultSpawn(config.binaryPath, () => config.configPath);
   const selections = new Map<string, { root: string; device: bigint; inode: bigint; expiresAt: number; users?: number; released?: boolean; dispose?: () => Promise<void> }>();
   const operations = new Map<string, Operation>();
   const active = new Set<NativeRun>();

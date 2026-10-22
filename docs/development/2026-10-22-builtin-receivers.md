@@ -17,6 +17,8 @@ Current delivery is NOT production-ready: receivers.json is empty because no rea
 receiver has been deployed. The online Linux ARM64 device bhrum2 has 2,210,902,016
 free bytes versus a 2,366,063,412 reserve, failing even a 64 MiB deployment. No
 server writes, cleanup or port exposure were performed. HTTPS issuer deployment,
-worker automatic initialization, generation ownership/cleanup, UI integration,
+automatic worker/UI device verification, crash-orphan profile cleanup,
 macOS AP lifecycle and signed installation remain pending. Do not publish a new
 working-network release or claim device acceptance from this source increment.
+
+Worker startup now starts one bounded preparation job; failed enrollment leaves local mode available. The backend reads current profile getters without recreating selections or cancelling running work. The Web capability Set refreshes in place and a bounded bootstrap observer updates the target selector. Graceful worker shutdown waits for cancellation and removes its owned generation; crash orphans are capped at eight and fail closed. No usable network is claimed for the empty production catalogue.

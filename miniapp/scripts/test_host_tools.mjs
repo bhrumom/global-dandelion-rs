@@ -145,3 +145,19 @@ test('page tools fall back to modelContext, then to nothing', () => {
   clearGlobals();
   assert.equal(registerPageTools([{ name: 'a', description: 'a', run: () => {} }]), null);
 });
+
+test('capability refresh updates the existing set after background preparation', async () => {
+  clearGlobals();
+  let ready = false;
+  globalThis.fabushi = { invoke: async () => ({ ok: true, data: { ...CAPABILITY_ANSWER, capabilities: ready ? ['offline', 'selection', 'transfer'] : ['offline'] } }) };
+  const host = await connectHost();
+  const original = host.capabilities;
+  assert.equal(original.has('transfer'), false);
+  ready = true;
+  await host.call('offline.capabilities');
+  assert.equal(host.capabilities, original);
+  assert.equal(original.has('transfer'), true);
+  ready = false;
+  await host.call('offline.capabilities');
+  assert.equal(original.has('transfer'), false);
+});

@@ -39,6 +39,7 @@ function main() {
   let backend = createDandelionCliBackend(profile.options(), ports);
   const makeRouter = () => createMiniAppToolRouter({ backend, allowedAppId: "org.fabushi.global-dandelion", approve: async tool => await host("confirmation", { detail: tool }) === true });
   let router = makeRouter();
+  void profile.prepareAutomatic();
   const compatibility = createCompatibility(join(__dirname, "dandelion.bin"), __dirname, host);
   const invokePackage = async (scope: MiniAppToolScope, method: unknown, args: unknown) => {
     const denied = { ok: false, error: { code: "PACKAGE_TOOL_FAILED", message: "操作未完成，请检查本机配置或重新授权。" } };
@@ -76,7 +77,8 @@ function main() {
     if (method === "config.check" && profile.error()) return { ok: false, error: { code: "CONFIG_INVALID", message: profile.error()! } };
     const result = await router.invoke(scope, method, args);
     if (method === "offline.capabilities" && result.ok && result.data && typeof result.data === "object") {
-      const data = result.data as { capabilities: string[] };
+      const data = result.data as { capabilities: string[]; network?: unknown };
+      data.network = profile.networkStatus();
       if (process.platform === "darwin" && !data.capabilities.includes("platform")) data.capabilities.push("platform");
       if (!data.capabilities.includes("update")) data.capabilities.push("update");
       if (!data.capabilities.includes("compat")) data.capabilities.push("compat");
@@ -86,6 +88,7 @@ function main() {
   let closing: Promise<void> | null = null;
   const shutdown = () => closing ??= (async () => {
     await backend.cancelAll?.();
+    await profile.close();
     for (const call of hostCalls.values()) { clearTimeout(call.timer); call.reject(new Error("RUNTIME_CLOSED")); }
     hostCalls.clear();
   })();

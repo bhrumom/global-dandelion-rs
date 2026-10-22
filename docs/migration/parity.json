@@ -779,7 +779,8 @@
         "docs/specs/native-apple-core.md"
       ],
       "verification_scope": "current-ci",
-      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation.",
+      "automatic_network_extension": "Package-owned receiver catalogue and Rust preparation; production nodes/issuer, worker/UI device proof, crash orphan cleanup and macOS AP pending. See docs/development/2026-10-22-builtin-receivers.md."
     }
   ],
   "acceptance_gate_manifest": "docs/acceptance-gates.json"

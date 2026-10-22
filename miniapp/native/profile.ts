@@ -1,8 +1,8 @@
 /** Account/app-private native configuration. Never serialized to the WebView. */
-import { execFileSync } from "node:child_process";
-import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, statfsSync, unlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, rmSync, statfsSync, unlinkSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { isIP } from "node:net";
 import { networkInterfaces } from "node:os";
 import type { DandelionCliConfig } from "./miniapp-cli-backend.js";
@@ -65,16 +65,61 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
   } catch (failure) {
     if ((failure as NodeJS.ErrnoException).code !== "ENOENT") error = "配置校验失败，请重新导入；当前仅允许本机回环。";
   }
+  let managed = false, managedExpiry = 0, ownedGeneration: string | null = null;
+  let networkState: { state: string; message: string; receivers: number } = { state: "checking", message: "正在检查小程序内置接收节点…", receivers: 0 };
+  let bootstrapChild: ReturnType<typeof spawn> | null = null;
+  let bootstrapJob: Promise<void> | null = null;
+  const targetPools = () => {
+    const remote = settings.transport.mode === "tls" && (!managed || Date.now() < managedExpiry);
+    return [{ id: "loopback", label: "本机回环验证" },
+      ...(remote ? [{ id: "configured", label: managed ? `内置接收节点（${networkState.receivers} 个已验证）` : "已明确授权的 mTLS 目标" }] : []),
+      ...(remote && !managed && settings.transport.tls.peers.some(peer => peer.class === "lan") ? [{ id: "lan", label: "已授权热点／局域网设备" }] : [])];
+  };
+  const prepareAutomatic = () => bootstrapJob ??= (async () => {
+    if (configPath !== defaultPath) { networkState = { state: "manual", message: "使用已导入的授权目标", receivers: settings.transport.tls.peers.length }; return; }
+    let stdout = "", length = 0;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(binaryPath, ["network-prepare", "--directory", directory, "--json"], { shell: false, stdio: ["ignore", "pipe", "ignore"], env: { PATH: "/usr/local/bin:/usr/bin:/bin", LC_ALL: "C", DANDELION_LOG: "warn" } });
+        bootstrapChild = child;
+        const timer = setTimeout(() => { child.kill("SIGKILL"); }, 60000);
+        child.stdout.on("data", (chunk: Buffer) => { length += chunk.length; if (length > 65536) child.kill("SIGKILL"); else stdout += chunk.toString("utf8"); });
+        child.once("error", reject);
+        child.once("close", code => { clearTimeout(timer); bootstrapChild = null; if (code === 0 && length <= 65536) resolve(); else reject(new Error("NETWORK_UNAVAILABLE")); });
+      });
+      const result = JSON.parse(stdout) as { config_path: string; expires_unix_seconds: number; receivers: number; authenticated: boolean };
+      const path = result.config_path;
+      if (typeof path !== "string" || basename(path) !== "service.toml" || dirname(dirname(path)) !== directory || !basename(dirname(path)).startsWith("network-generation-")) throw new Error("INVALID_NETWORK_PROFILE");
+      ownedGeneration = dirname(path);
+      if (result.authenticated !== true || !Number.isSafeInteger(result.expires_unix_seconds) || result.expires_unix_seconds * 1000 <= Date.now() || result.expires_unix_seconds * 1000 > Date.now() + 900000 || !Number.isInteger(result.receivers) || result.receivers < 1 || result.receivers > 8) throw new Error("INVALID_NETWORK_PROOF");
+      const next = inspect(path);
+      if (next.transport.mode !== "tls" || next.state.directory !== stateDirectory || next.scanner.roots.length || next.scanner.allowed_mount_prefixes.length) throw new Error("INVALID_NETWORK_SCOPE");
+      // Keep the same backend and selection handles. Background completion must
+      // not cancel or recreate a user session already running local loopback.
+      if (configPath !== defaultPath) throw new Error("PROFILE_CHANGED");
+      settings = next; configPath = path; managed = true; managedExpiry = result.expires_unix_seconds * 1000;
+      networkState = { state: "ready", message: "内置接收节点已通过证书与协议校验", receivers: result.receivers };
+    } catch {
+      networkState = { state: "unavailable", message: "小程序尚无可用的内置接收节点，本地回环可继续使用。", receivers: 0 };
+    }
+  })();
   return {
     error: () => error,
+    prepareAutomatic,
+    networkStatus: () => managed && Date.now() >= managedExpiry ? { state: "expired", message: "接收节点校验已过期，请重新打开小程序连接。", receivers: 0 } : networkState,
+    async close() {
+      bootstrapChild?.kill("SIGKILL");
+      await bootstrapJob;
+      if (ownedGeneration) { rmSync(ownedGeneration, { recursive: true, force: true }); ownedGeneration = null; }
+    },
     options(): DandelionCliConfig {
-      const tls = settings.transport.tls;
-      const remote = settings.transport.mode === "tls";
-      return { binaryPath, configPath, allowedRoots: [], authorizePickedRoots: true, stateDirectory,
-        targetPools: [{ id: "loopback", label: "本机回环验证" },
-          ...(remote ? [{ id: "configured", label: "已明确授权的 mTLS 目标" }] : []),
-          ...(remote && tls.peers.some(peer => peer.class === "lan") ? [{ id: "lan", label: "已授权热点／局域网设备" }] : [])],
-        ...(remote ? { receive: { targetPoolId: "configured", caFile: tls.ca_file, certificateFile: tls.certificate_file, privateKeyFile: tls.private_key_file, bind: receiveBind, allowedClients: [...new Set(tls.peers.map(peer => peer.address.startsWith("[") ? peer.address.slice(1, peer.address.indexOf("]")) : peer.address.slice(0, peer.address.lastIndexOf(":"))))], timeoutMs: 60000 } } : {}),
+      return { binaryPath, get configPath() { return configPath; }, allowedRoots: [], authorizePickedRoots: true, stateDirectory,
+        get targetPools() { return targetPools(); },
+        get receive() {
+          const tls = settings.transport.tls;
+          if (managed || settings.transport.mode !== "tls") return undefined;
+          return { targetPoolId: "configured", caFile: tls.ca_file, certificateFile: tls.certificate_file, privateKeyFile: tls.private_key_file, bind: receiveBind, allowedClients: [...new Set(tls.peers.map(peer => peer.address.startsWith("[") ? peer.address.slice(1, peer.address.indexOf("]")) : peer.address.slice(0, peer.address.lastIndexOf(":"))))], timeoutMs: 60000 };
+        },
       };
     },
     validBind,
@@ -100,7 +145,7 @@ export function createProfile(binaryPath: string, defaultPath: string, directory
         return { summary, discard, commit() {
           reserve(directory, 1048576);
           renameSync(temporary, saved);
-          configPath = saved; settings = next; error = null;
+          configPath = saved; settings = next; managed = false; error = null;
         } };
       } catch (failure) { discard(); throw failure; }
     },

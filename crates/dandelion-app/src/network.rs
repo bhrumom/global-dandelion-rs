@@ -208,7 +208,7 @@ pub fn prepare(directory: &Path) -> Result<serde_json::Value> {
         ));
     }
     let result = serde_json::json!({"config_path": staged.path().join("service.toml"), "expires_unix_seconds": expires, "receivers": config.transport.tls.peers.len(), "authenticated": true});
-    staged.keep();
+    let _owned_generation = staged.keep();
     Ok(result)
 }
 
