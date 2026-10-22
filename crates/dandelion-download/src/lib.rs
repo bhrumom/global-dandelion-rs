@@ -172,12 +172,11 @@ pub fn resources(html: &str, base: &Url) -> Vec<Url> {
         if let Some(url) = raw
             .and_then(|v| base.join(v).ok())
             .and_then(|v| parse(v.as_str()).ok())
+            && seen.insert(url.to_string())
         {
-            if seen.insert(url.to_string()) {
-                result.push(url);
-                if result.len() == 31 {
-                    break;
-                }
+            result.push(url);
+            if result.len() == 31 {
+                break;
             }
         }
     }
