@@ -38,6 +38,10 @@ jobs:
           cargo build --locked --release -p dandelion-app
           mkdir native-built
           cp target/release/dandelion native-built/dandelion.bin
+          mkdir -p dist
+          python3 scripts/license_report.py
+          cp dist/THIRD-PARTY-NOTICES.txt native-built/THIRD-PARTY-NOTICES.txt
+          cp Cargo.lock native-built/CargoLock.txt
           npx --yes esbuild@0.25.12 miniapp/native/worker.ts --bundle --platform=node --target=node24 --format=cjs --outfile=native-built/worker.cjs
           printf '[scanner]\nmax_files = 128\nmax_read_bytes = 1073741824\n[transport]\nmode = "loopback"\n[state]\nenabled = false\n' > native-built/default.toml
           native-built/dandelion.bin --config native-built/default.toml self-test --json
@@ -47,6 +51,7 @@ jobs:
           npx --yes esbuild@0.25.12 miniapp/native/progress-stream.ts --bundle --platform=node --format=cjs --outfile=native-built/progress-stream.cjs
           npx --yes esbuild@0.25.12 miniapp/native/miniapp-cli-backend.ts --bundle --platform=node --format=cjs --outfile=native-built/backend.cjs
           node miniapp/scripts/test_progress_stream.cjs native-built/progress-stream.cjs native-built/backend.cjs
+          node miniapp/scripts/test_download_backend.cjs native-built/backend.cjs native-built/dandelion.bin native-built/default.toml
           node miniapp/scripts/test_native_worker.cjs native-built
           python3 miniapp/scripts/test_native_tls.py native-built
       - name: Build same-revision offline Wasm resources
@@ -58,7 +63,7 @@ jobs:
       - name: Prepare native-capability package
         run: |
           python3 scripts/disk_guard.py --path . --planned-bytes 67108864
-          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --version 0.4.3 --platforms desktop --native-dir native-built --output global-dandelion-UNSIGNED.zip
+          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --version 0.4.4 --platforms desktop --native-dir native-built --output global-dandelion-UNSIGNED.zip
           python3 -m venv "$RUNNER_TEMP/native-package-python"
           "$RUNNER_TEMP/native-package-python/bin/pip" install cryptography==46.0.3
           "$RUNNER_TEMP/native-package-python/bin/python" miniapp/scripts/test_package.py miniapp-resources

@@ -9,10 +9,12 @@
  * snapshots, preserving exactly the selected set instead of its parent folder.
  */
 import { spawn } from "node:child_process";
+import { reserve } from "./profile.js";
+import { extractLinks } from "../web/links.js";
 import { stageFiles } from "./staging.js";
 import { ProgressStream } from "./progress-stream.js";
 import { randomUUID } from "node:crypto";
-import { lstat, readdir, realpath, stat } from "node:fs/promises";
+import { lstat, readdir, realpath, stat, mkdtemp, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import type {
   MiniAppCapability,
@@ -143,6 +145,7 @@ interface Operation {
   result?: unknown;
   error?: string;
   mode: "single" | "receive" | "send";
+  download?: boolean;
 }
 
 export function createDandelionCliBackend(
@@ -158,6 +161,8 @@ export function createDandelionCliBackend(
   const operations = new Map<string, Operation>();
   const active = new Set<NativeRun>();
   let generation = 0;
+  let downloadAdmitting = false;
+  const downloadJobs = new Set<Promise<void>>();
   const stagingJobs = new Set<Promise<Awaited<ReturnType<typeof stageFiles>>>>();
   const stageSnapshot = (paths: string[], limits: { maxFiles: number; maxBytes: number }, text = '') => {
     if (stagingJobs.size) throw new Error("STAGING_BUSY");
@@ -329,7 +334,7 @@ export function createDandelionCliBackend(
         if (platform === "linux" && config.enableHotspot === true) capabilities.push("hotspot");
         if (config.enableUpdate === true) capabilities.push("update");
       }
-      return Promise.resolve({ capabilities, platform: "desktop", targetPools: [...config.targetPools] });
+      return Promise.resolve({ capabilities, platform: "desktop", targetPools: [...config.targetPools], features: available && stateDirectory ? ["link-download-v1"] : [] });
     },
     readState() {
       return Promise.resolve({
@@ -372,6 +377,72 @@ export function createDandelionCliBackend(
       const entries: MiniAppSelectionEntry[] = [{ name: basename(root), size: picked[0]!.size }];
       return { selectionId, entries };
     },
+    async downloadLinks(text, selectionId) {
+      if (downloadAdmitting) throw new Error("DOWNLOAD_BUSY");
+      downloadAdmitting = true;
+      try {
+      if (!stateDirectory || downloadJobs.size || stagingJobs.size || Buffer.byteLength(text) > 65536) throw new Error("DOWNLOAD_BUSY_OR_LIMIT");
+      const urls = extractLinks(text);
+      if (!urls.length || urls.length > 8) throw new Error("DOWNLOAD_LINK_LIMIT");
+      const ticket = generation;
+      await requireNative();
+      if (ticket !== generation || downloadJobs.size) throw new Error("DANDELION_CANCELLED");
+      const previous = selectionId ? selections.get(selectionId) : undefined;
+      if (selectionId && (!previous || !previous.dispose)) throw new Error("STAGED_SELECTION_REQUIRED");
+      if (previous) await requireSelection(selectionId!);
+      pruneOperations();
+      if (operations.size >= MAX_OPERATIONS) throw new Error("NATIVE_OPERATION_LIMIT");
+      const parentInfo = await lstat(stateDirectory);
+      if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink() || (parentInfo.mode & 0o077) !== 0) throw new Error("PRIVATE_STAGING_REQUIRED");
+      if ((await readdir(stateDirectory)).filter(name => name.startsWith("download-")).length >= 8) throw new Error("DOWNLOAD_CLEANUP_REQUIRED");
+      reserve(stateDirectory, 1024 * 1024);
+      const directory = await mkdtemp(join(stateDirectory, "download-"));
+      if (ticket !== generation) { await rm(directory, { recursive: true, force: true }); throw new Error("DANDELION_CANCELLED"); }
+      if (previous) previous.users = (previous.users ?? 0) + 1;
+      const id = randomUUID();
+      let run: NativeRun;
+      try { run = admit(["download", "--directory", directory, ...urls.flatMap(url => ["--url", url]), "--progress-json", "--json"]); }
+      catch (error) { if (previous) previous.users!--; await rm(directory, { recursive: true, force: true }); throw error; }
+      const operation: Operation = { run, state: "running", mode: "send", download: true };
+      operations.set(id, operation);
+      const timer = setTimeout(() => { run.timedOut = true; run.handle.kill(); }, 120000);
+      let job: Promise<void>;
+      job = (async () => {
+        let staged: Awaited<ReturnType<typeof stageFiles>> | undefined;
+        try {
+          const receipt = await finish(run, "send") as { entries: { name: string; file: string; size: number }[]; warnings: string[] };
+          if (!Array.isArray(receipt.entries) || receipt.entries.length < 1 || receipt.entries.length > 32 || receipt.entries.some(e => !/^resource-[0-9]{3}\.(bin|html)$/.test(e.file) || typeof e.name !== "string" || e.name.length > 160 || !Number.isSafeInteger(e.size) || e.size < 0)) throw new Error("INVALID_DOWNLOAD_RECEIPT");
+          if (ticket !== generation || operation.state === "cancelled") return;
+          const source = previous ? (await readdir(previous.root)).map(name => join(previous.root, name)) : [];
+          const paths = receipt.entries.map(entry => join(directory, entry.file));
+          for (const [index, path] of paths.entries()) { const info = await lstat(path); if (!info.isFile() || info.isSymbolicLink() || info.size !== receipt.entries[index]!.size) throw new Error("INVALID_DOWNLOAD_FILE"); }
+          staged = await stageSnapshot([...source, ...paths], { maxFiles: 128, maxBytes: 1024 ** 3 });
+          if (ticket !== generation || operation.state === "cancelled") return;
+          if (run.timedOut) throw new Error("DOWNLOAD_TIMEOUT");
+          pruneSelections();
+          if (selections.size >= MAX_SELECTIONS) throw new Error("SELECTION_LIMIT_EXCEEDED");
+          const info = await stat(staged.root, { bigint: true }), selectionId = randomUUID();
+          const entries = staged.entries.map((entry, index) => index < source.length ? entry : { name: receipt.entries[index - source.length]!.name, size: entry.size });
+          selections.set(selectionId, { root: staged.root, device: info.dev, inode: info.ino, expiresAt: Date.now() + SELECTION_TTL_MS, dispose: staged.dispose });
+          staged = undefined;
+          operation.result = { selectionId, entries, warnings: Array.isArray(receipt.warnings) ? receipt.warnings.slice(0, 32).map(w => String(w).slice(0, 240)) : [] };
+        } catch (error) {
+          if (operation.state !== "cancelled") { operation.state = "failed"; operation.error = run.timedOut ? "下载超时，请检查链接或资源大小。" : "下载未完成，请检查链接访问权限、网络或文件大小。"; }
+        } finally {
+          clearTimeout(timer);
+          try {
+            await staged?.dispose();
+            if (previous) { previous.users!--; if (previous.released && !previous.users) await previous.dispose?.(); }
+            await rm(directory, { recursive: true, force: true });
+          } catch { operation.state = "failed"; operation.error = "下载暂存清理未完成，请关闭小程序后检查可用空间。"; }
+        }
+        if (operation.state === "running" && operation.result) operation.state = "complete";
+      })();
+      downloadJobs.add(job);
+      void job.then(() => downloadJobs.delete(job), () => downloadJobs.delete(job));
+      return { operationId: id };
+      } finally { downloadAdmitting = false; }
+    },
     async compose(text, selectionId) {
       if (!stateDirectory || Buffer.byteLength(text) > 65536 || !text) throw new Error("MESSAGE_LIMIT");
       const ticket = generation;
@@ -391,6 +462,13 @@ export function createDandelionCliBackend(
       return { selectionId: id, entries: staged.entries };
     },
     release(selectionId) {
+      const download = operations.get(selectionId);
+      if (download?.download && download.state === "running") { download.state = "cancelled"; download.run.cancelled = true; download.run.handle.kill(); }
+      if (download?.download && download.state === "complete" && download.result && typeof download.result === "object") {
+        const completed = Reflect.get(download.result, "selectionId");
+        if (typeof completed === "string") dropSelection(completed);
+        download.state = "cancelled";
+      }
       dropSelection(selectionId);
       return Promise.resolve();
     },
@@ -466,7 +544,7 @@ export function createDandelionCliBackend(
           if (frame.event === "progress" && [frame.sequence, frame.pass_verified_payload_bytes, frame.pass_chunks_sent].every(value => Number.isSafeInteger(value) && value >= 0)) progress = { sequence: frame.sequence, pass_verified_payload_bytes: frame.pass_verified_payload_bytes, pass_chunks_sent: frame.pass_chunks_sent };
         } catch { /* a partially written progress line is not evidence */ }
       }
-      return { state: operation.state, result: operation.result, error: operation.error, ready, progress };
+      return { state: operation.state, result: operation.result, error: operation.error, ready, progress, ...(operation.download ? { kind: "download" } : {}) };
     },
     async cancel(operationId) {
       const operation = operations.get(operationId);
@@ -477,14 +555,14 @@ export function createDandelionCliBackend(
     },
     async cancelAll() {
       generation += 1;
-      const owned = [...selections.values()], runs = [...active], stages = [...stagingJobs];
+      const owned = [...selections.values()], runs = [...active], stages = [...stagingJobs], downloads = [...downloadJobs];
       for (const operation of operations.values()) {
         if (operation.state === "running") operation.state = "cancelled";
       }
       for (const run of active) { run.cancelled = true; run.handle.kill(); }
       operations.clear();
       for (const id of selections.keys()) dropSelection(id);
-      await Promise.allSettled([...runs.map(run => run.handle.done), ...stages]);
+      await Promise.allSettled([...runs.map(run => run.handle.done), ...stages, ...downloads]);
       await Promise.all(owned.map(record => record.dispose?.()));
     },
     async scan(mode, rootId) {

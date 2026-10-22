@@ -22,6 +22,7 @@ INLINE_REWRITES = {
     "./host-tools.js": "fabushi-host-tools",
     "./composer.js": "fabushi-composer",
     "./globe.js": "fabushi-globe",
+    "./links.js": "fabushi-links",
 }
 INLINE_CSP = (
     "default-src 'none'; script-src 'unsafe-inline' data: 'wasm-unsafe-eval'; "
@@ -70,12 +71,12 @@ def prepare(pkg, output, source_commit, version, platforms, native_dir=None):
         "network-transfer=host-mediated\n", encoding="utf-8")
     files = {}
     if native_dir is not None:
-        if platforms != ['desktop'] or version not in ('0.4.0', '0.4.1', '0.4.2', '0.4.3'):
-            raise ValueError('native package requires reviewed Mac-only 0.4.0/0.4.1/0.4.2/0.4.3 release')
+        if platforms != ['desktop'] or version not in ('0.4.0', '0.4.1', '0.4.2', '0.4.3', '0.4.4'):
+            raise ValueError('native package requires reviewed Mac-only 0.4.0/0.4.1/0.4.2/0.4.3/0.4.4 release')
         (output / 'native').mkdir()
         info = output / 'BUILD-INFO.txt'
         info.write_text(info.read_text().replace('kind=offline-web-preview', 'kind=install-owned-native-macos'), encoding='utf-8')
-        for name in ['worker.cjs', 'dandelion.bin', 'default.toml']:
+        for name in ['worker.cjs', 'dandelion.bin', 'default.toml', 'THIRD-PARTY-NOTICES.txt', 'CargoLock.txt']:
             shutil.copyfile(native_dir / name, output / 'native' / name)
         binary = (output / 'native/dandelion.bin').read_bytes()
         if binary[:8] != bytes.fromhex('cffaedfe0c000001') or len(binary) > 64 * 1024 * 1024:
@@ -128,7 +129,7 @@ def inline_html(resources, destination):
         "fabushi-host-tools": (resources / "host-tools.js").read_text(encoding="utf-8"),
     }
     # Module dependencies are rewritten before inlining, including nested imports.
-    for filename, module in [('globe.js', 'fabushi-globe'), ('composer.js', 'fabushi-composer')]:
+    for filename, module in [('links.js', 'fabushi-links'), ('globe.js', 'fabushi-globe'), ('composer.js', 'fabushi-composer')]:
         source = (resources / filename).read_text(encoding='utf-8')
         for old, new in INLINE_REWRITES.items():
             source = source.replace(f"'{old}'", f"'{new}'").replace(f'"{old}"', f'"{new}"')

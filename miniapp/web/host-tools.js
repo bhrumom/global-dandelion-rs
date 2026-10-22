@@ -131,11 +131,19 @@ function detectBridge() {
 export async function connectHost() {
   const bridge = detectBridge();
   if (!bridge) return { ...UNAVAILABLE, reason: 'NO_HOST_BRIDGE' };
+  const capabilities = new Set();
   const call = async (tool, args = {}) => {
     if (!Object.hasOwn(TOOLS, tool)) {
       return { ok: false, error: { code: 'UNKNOWN_TOOL', message: `未声明的工具：${tool}` } };
     }
-    try { return normalise(await bridge.invoke(tool, args)); }
+    try {
+      const result = normalise(await bridge.invoke(tool, args));
+      if (tool === 'offline.capabilities' && result.ok && Array.isArray(result.data?.capabilities)) {
+        capabilities.clear();
+        for (const capability of result.data.capabilities) if (typeof capability === 'string') capabilities.add(capability);
+      }
+      return result;
+    }
     catch (error) {
       const message = String(error?.message ?? error);
       // Both mobile hosts reject ungranted tools with this exact prefix.
@@ -146,9 +154,6 @@ export async function connectHost() {
     }
   };
   const announced = await call('offline.capabilities', { contract: TOOL_CONTRACT });
-  const capabilities = new Set(
-    announced.ok && Array.isArray(announced.data?.capabilities) ? announced.data.capabilities : [],
-  );
   return {
     available: announced.ok,
     platform: announced.ok ? String(announced.data?.platform ?? bridge.platform) : bridge.platform,

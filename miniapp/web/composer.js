@@ -1,3 +1,4 @@
+import { extractLinks, withoutLinks } from './links.js';
 import { createGlobe } from './globe.js';
 import { formatBytes } from './host-tools.js';
 
@@ -5,6 +6,7 @@ const $ = id => document.getElementById(id);
 const MAX_BYTES = 1024 ** 3;
 export async function mountComposer(rust, host) {
   let pools = [], files = [], nativeSelection = null, nativeEntries = [], busy = false, epoch = 0, operation = null, origin = null, report = null, closed = false;
+  let downloadOperation = null, canDownload = false, preparedLinksText = null;
   const globe = rust ? createGlobe($('earth'), rust, text => { $('globe-state').textContent = text; $('earth-fallback').textContent = text; $('earth-fallback').hidden = false; }) : { update() {}, destroy() {} };
   const status = text => { if (!closed) $('composer-status').textContent = text; };
   const mode = () => $('mode').value;
@@ -29,7 +31,7 @@ export async function mountComposer(rust, host) {
     if (busy) return;
     epoch++;
     const previous = nativeSelection; nativeSelection = null; nativeEntries = []; files = []; report = null;
-    $('composer-files').value = ''; $('message').value = ''; $('composer-progress').value = 0; list(); controls();
+    preparedLinksText = null; $('composer-files').value = ''; $('message').value = ''; $('composer-progress').value = 0; list(); controls();
     if (previous) await host.call('selection.release', { selectionId: previous });
   };
   const selectedRate = () => {
@@ -76,6 +78,7 @@ export async function mountComposer(rust, host) {
   };
   const refreshPools = async () => {
     const response = await host.call('offline.capabilities', {});
+    canDownload = response.ok && response.data?.features?.includes('link-download-v1') === true;
     pools = response.ok && Array.isArray(response.data?.targetPools) ? response.data.targetPools.slice(0, 16) : [];
     $('composer-target').replaceChildren();
     const eligible = pools.filter(pool => mode() === 'hotspot' ? pool.id === 'lan' || pool.kind === 'lan' : pool.id !== 'loopback' && pool.id !== 'lan' && pool.kind !== 'lan');
@@ -212,8 +215,55 @@ export async function mountComposer(rust, host) {
       status(`引擎已完成，实际校验 ${formatBytes(Number(receipt.verified_payload_bytes ?? 0))}。`); return;
     }
   }
+  const prepareLinks = async () => {
+    if (busy || closed) return false;
+    const text = $('message').value, urls = extractLinks(text);
+    if (!urls.length) return true;
+    if (files.length) { status('已选离线文件会保留；请先完成当前离线文件，或清空后通过 ＋ 重新选择文件再添加链接。'); return false; }
+    if (!canDownload) { status('此安装版本没有 Rust 链接下载能力，请更新小程序。'); return false; }
+    if (urls.length > 8) { status('一次最多下载 8 个链接。'); return false; }
+    busy = true; const ticket = ++epoch;
+    controls(); $('stop-composer').setAttribute('aria-label', '取消下载'); status('正在获取链接资源…');
+    try {
+      const response = await host.call('selection.compose', { text, downloadLinks: true, ...(nativeSelection ? { selectionId: nativeSelection } : {}) });
+      if (!response.ok || typeof response.data?.operationId !== 'string') throw new Error(response.error?.message ?? '无法启动链接下载。');
+      const id = response.data.operationId;
+      if (closed || ticket !== epoch) { await host.call('selection.release', { selectionId: id }); return false; }
+      downloadOperation = id;
+      while (!closed && ticket === epoch) {
+        const result = await host.call('transfer.status', { operationId: id });
+        if (!result.ok) throw new Error(result.error.message);
+        const state = result.data ?? {};
+        if (state.state === 'running') {
+          const progress = state.progress;
+          status(progress ? `正在下载 · ${formatBytes(progress.pass_verified_payload_bytes)} · ${progress.pass_chunks_sent} 个文件` : '正在解析链接并下载资源…');
+          await pause(400); continue;
+        }
+        if (state.state !== 'complete' || typeof state.result?.selectionId !== 'string') throw new Error(state.error ?? '下载已取消。');
+        const previous = nativeSelection;
+        nativeSelection = state.result.selectionId; nativeEntries = state.result.entries ?? [];
+        downloadOperation = null;
+        const warnings = state.result.warnings ?? [];
+        preparedLinksText = warnings.length ? text : null;
+        $('message').value = warnings.length ? text : withoutLinks(text, urls);
+        if (previous) await host.call('selection.release', { selectionId: previous });
+        list();
+        status(warnings.length ? `已添加下载资源；${warnings.length} 项未下载，请核对附件后再发送。${warnings[0]}` : '链接资源已下载并加入附件，点击 ↑ 发送。');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      if (downloadOperation) await host.call('selection.release', { selectionId: downloadOperation });
+      if (ticket === epoch) status(`链接下载失败：${error.message}；原文字和附件已保留。`);
+      return false;
+    } finally {
+      if (ticket === epoch) { downloadOperation = null; busy = false; controls(); $('stop-composer').setAttribute('aria-label', '停止运行'); }
+    }
+  };
+  $('message').addEventListener('paste', () => { setTimeout(() => { if (!closed) void prepareLinks(); }, 0); });
   $('launch').onclick = async () => {
     if (busy || !rust) return;
+    if (extractLinks($('message').value).length && $('message').value !== preparedLinksText) { if (await prepareLinks()) $('launch').click(); return; }
     busy = true; report = null; const ticket = ++epoch, repeats = $('cycles').checked ? null : 1, currentMode = mode();
     globe.update({ active: false, confirmed: false, mode: currentMode });
     controls(); status(currentMode === 'local' ? '正在启动 Rust 本地回环…' : '正在请求安装包启动传输…'); $('composer-progress').value = 0; $('composer-packets').textContent = '0'; $('composer-bytes').textContent = '0 B'; $('composer-pass').textContent = repeats === null ? '∞' : '0';
@@ -225,14 +275,16 @@ export async function mountComposer(rust, host) {
     finally { if (ticket === epoch) { busy = false; operation = null; globe.update({ active: false, ...(currentMode === 'local' && report?.status === 'complete' ? { confirmed: true } : {}) }); controls(); $('globe-state').textContent = report?.status === 'complete' ? '本次运行已完成' : report?.status === 'budget_exhausted' ? '已达到运行预算' : '已停止 · 等待下一次运行'; } }
   };
   $('stop-composer').onclick = async () => {
-    epoch++; const id = operation; report = null; globe.update({ active: false, confirmed: false });
+    epoch++;
+    if (downloadOperation) { const id = downloadOperation; downloadOperation = null; const result = await host.call('selection.release', { selectionId: id }); if (!result.ok) { status('取消下载尚未确认，请再次停止。'); downloadOperation = id; return; } busy = false; controls(); status('已取消下载，原文字和附件已保留。'); return; }
+    const id = operation; report = null; globe.update({ active: false, confirmed: false });
     if (id) {
       status('正在请求停止…'); const result = await host.call('transfer.cancel', { operationId: id });
       if (!result.ok) { $('globe-state').textContent = '停止未确认'; status(`停止请求未确认，可再次点击停止：${result.error.message}`); return; }
     }
     operation = null; busy = false; controls(); $('globe-state').textContent = '已停止'; status(id ? '已请求停止原生传输。' : '已停止本次运行。');
   };
-  window.addEventListener('pagehide', () => { closed = true; epoch++; if (operation) void host.call('transfer.cancel', { operationId: operation }); if (nativeSelection) void host.call('selection.release', { selectionId: nativeSelection }); files = []; report = null; globe.destroy(); }, { once: true });
+  window.addEventListener('pagehide', () => { closed = true; epoch++; if (downloadOperation) void host.call('selection.release', { selectionId: downloadOperation }); if (operation) void host.call('transfer.cancel', { operationId: operation }); if (nativeSelection) void host.call('selection.release', { selectionId: nativeSelection }); files = []; report = null; globe.destroy(); }, { once: true });
   await refreshPools();
   if (nativeLocal()) $('mode-description').textContent = '本地转轮：安装包内 Rust 引擎执行本机 UDP 回环，不连接外部目标。';
   $('globe-state').textContent = rust ? '本地转轮 · Rust 已就绪' : 'Rust 内核加载失败';

@@ -13,6 +13,7 @@ name = "dandelion"
 path = "src/main.rs"
 
 [dependencies]
+dandelion-download.workspace = true
 dandelion-compat.workspace = true
 blake3.workspace = true
 dandelion-hotspot.workspace = true

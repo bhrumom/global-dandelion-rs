@@ -88,6 +88,7 @@ networking.
 
 ```text
 crates/
+  dandelion-download/        bounded public HTTP downloads and HTML resource extraction
   dandelion-app/             CLI and composition root; Supervisor
   dandelion-core/            values, policies, capability contracts, pure telemetry/rate models; no Tokio/Linux
   dandelion-config/          deserialization, merge, validation
