@@ -38,6 +38,10 @@ jobs:
           cargo build --locked --release -p dandelion-app
           mkdir native-built
           cp target/release/dandelion native-built/dandelion.bin
+          mkdir -p dist
+          python3 scripts/license_report.py
+          cp dist/THIRD-PARTY-NOTICES.txt native-built/THIRD-PARTY-NOTICES.txt
+          cp Cargo.lock native-built/CargoLock.txt
           npx --yes esbuild@0.25.12 miniapp/native/worker.ts --bundle --platform=node --target=node24 --format=cjs --outfile=native-built/worker.cjs
           printf '[scanner]\nmax_files = 128\nmax_read_bytes = 1073741824\n[transport]\nmode = "loopback"\n[state]\nenabled = false\n' > native-built/default.toml
           native-built/dandelion.bin --config native-built/default.toml self-test --json
