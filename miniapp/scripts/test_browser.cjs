@@ -97,9 +97,10 @@ const origin = 'https://global-dandelion.fixture.invalid';
       globalThis.fabushi = { invoke: async (tool, args) => {
         globalThis.__calls.push({ tool, args });
         if (tool === 'transfer.send') { globalThis.__count = 0; if (globalThis.__deny) return { ok: false, error: { message: 'fixture-send-denied' } }; }
-        const data = tool === 'offline.capabilities' ? { platform: 'desktop', capabilities: ['selection', 'transfer', 'config'], targetPools: [{ id: 'configured', label: 'Authorized receiver' }, { id: 'lan', label: 'Authorized LAN' }] }
-          : tool === 'selection.compose' ? { selectionId: 'fixture-selection', entries: [] }
+        const data = tool === 'offline.capabilities' ? { platform: 'desktop', capabilities: ['selection', 'transfer', 'config'], features: ['link-download-v1'], targetPools: [{ id: 'configured', label: 'Authorized receiver' }, { id: 'lan', label: 'Authorized LAN' }] }
+          : tool === 'selection.compose' ? (args.downloadLinks ? { operationId: 'fixture-download' } : { selectionId: 'fixture-selection', entries: [] })
           : tool === 'transfer.send' ? { operationId: 'fixture-operation' }
+          : tool === 'transfer.status' && args.operationId === 'fixture-download' ? { state: 'complete', kind: 'download', result: { selectionId: 'fixture-downloaded', entries: [{ name: 'linked.pdf', size: 99 }], warnings: [] } }
           : tool === 'transfer.status' ? (globalThis.__count++ === 0 || globalThis.__continuous ? { state: 'running', progress: { sequence: globalThis.__count, pass_chunks_sent: 1, pass_verified_payload_bytes: 7 } } : { state: 'complete', result: { verified_payload_bytes: 7, chunks_sent: 1 } }) : { imported: true };
         return { ok: true, data };
       } };
@@ -110,6 +111,12 @@ const origin = 'https://global-dandelion.fixture.invalid';
     for (const [id, value] of [['origin-lat', '31.23'], ['origin-lon', '121.47'], ['destination-lat', '37.77'], ['destination-lon', '-122.42']]) await page.locator('#' + id).fill(value);
     await page.locator('#set-origin').click(); await page.locator('#import-config').click();
     await page.waitForFunction(() => document.getElementById('settings-status').textContent.includes('已导入'));
+    await page.locator('#message').fill('https://example.invalid/linked.pdf');
+    await page.locator('#message').dispatchEvent('paste');
+    await page.waitForFunction(() => document.getElementById('composer-file-list').textContent.includes('linked.pdf'));
+    check(await page.locator('#message').inputValue(), '');
+    check(await page.evaluate(() => globalThis.__calls.filter(c => c.tool === 'transfer.send').length), 0);
+    check(await page.evaluate(() => globalThis.__calls.some(c => c.tool === 'selection.compose' && c.args.downloadLinks === true)), true);
     await page.locator('#open-settings').click(); await page.locator('#message').fill('authorized global fixture'); await page.locator('#launch').click(); await complete();
     const send = await page.evaluate(() => globalThis.__calls.find(c => c.tool === 'transfer.send').args);
     check(send.rateBytesPerSecond, 7 * 1024); check(send.repeat, 1); check(send.targetPoolId, 'configured');

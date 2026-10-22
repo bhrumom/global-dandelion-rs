@@ -47,6 +47,7 @@ jobs:
           npx --yes esbuild@0.25.12 miniapp/native/progress-stream.ts --bundle --platform=node --format=cjs --outfile=native-built/progress-stream.cjs
           npx --yes esbuild@0.25.12 miniapp/native/miniapp-cli-backend.ts --bundle --platform=node --format=cjs --outfile=native-built/backend.cjs
           node miniapp/scripts/test_progress_stream.cjs native-built/progress-stream.cjs native-built/backend.cjs
+          node miniapp/scripts/test_download_backend.cjs native-built/backend.cjs native-built/dandelion.bin native-built/default.toml
           node miniapp/scripts/test_native_worker.cjs native-built
           python3 miniapp/scripts/test_native_tls.py native-built
       - name: Build same-revision offline Wasm resources

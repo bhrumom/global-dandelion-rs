@@ -32,6 +32,15 @@ pub enum LogFormat {
 }
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Download public links into an owned empty private directory; never send them.
+    Download {
+        #[arg(long)]
+        directory: PathBuf,
+        #[arg(long, required = true, action = clap::ArgAction::Append)]
+        url: Vec<String>,
+        #[arg(long, requires = "json")]
+        progress_json: bool,
+    },
     /// Read selected directories once and verify every datagram locally.
     Run(Run),
     /// Receive and verify TLS 1.3 data from authenticated clients (memory receipts).

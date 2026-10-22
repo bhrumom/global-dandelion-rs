@@ -779,7 +779,8 @@
         "docs/specs/native-apple-core.md"
       ],
       "verification_scope": "current-ci",
-      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation."
+      "platform_extension": "Apple native core implementation under AP-01..07; exact-head native-apple workflow required. Does not prove installed Fabushi Host or mobile operation.",
+      "link_download_extension": "Rust public URL and HTML-resource download to private composer selections; source/CI and installed-device proof tracked separately under docs/specs/link-download.md."
     }
   ],
   "acceptance_gate_manifest": "docs/acceptance-gates.json"

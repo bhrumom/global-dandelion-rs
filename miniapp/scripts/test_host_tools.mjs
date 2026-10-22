@@ -145,3 +145,12 @@ test('page tools fall back to modelContext, then to nothing', () => {
   clearGlobals();
   assert.equal(registerPageTools([{ name: 'a', description: 'a', run: () => {} }]), null);
 });
+
+test('paste URL parsing preserves ordinary text and deduplicates resources', async () => {
+  const { extractLinks, withoutLinks } = await import('../web/links.js');
+  const text = '请发送 https://example.invalid/a.pdf，另一个 https://example.invalid/a.pdf';
+  const links = extractLinks(text);
+  assert.deepEqual(links, ['https://example.invalid/a.pdf']);
+  assert.ok(withoutLinks(text, links).includes('请发送'));
+  assert.deepEqual(extractLinks('普通文字 file:///etc/passwd'), []);
+});

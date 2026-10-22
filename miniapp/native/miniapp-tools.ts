@@ -65,6 +65,7 @@ export interface MiniAppToolBackend {
   readState(): Promise<unknown>;
   pick(mode: "files" | "directory", limits: { readonly maxFiles: number; readonly maxBytes: number }): Promise<{ readonly selectionId: string; readonly entries: MiniAppSelectionEntry[] } | null>;
   release(selectionId: string): Promise<void>;
+  downloadLinks?(text: string, selectionId?: string): Promise<{ readonly operationId: string }>;
   compose?(text: string, selectionId?: string): Promise<{ readonly selectionId: string; readonly entries: MiniAppSelectionEntry[] }>;
   send(config: MiniAppTransferSendConfig): Promise<{ readonly operationId: string }>;
   receive?(config: MiniAppReceiveConfig): Promise<{ readonly operationId: string }>;
@@ -139,7 +140,12 @@ function handlersFor(backend: MiniAppToolBackend): Map<string, { capability: Min
     }],
     ["selection.compose", MINIAPP_CAPABILITY.SELECTION, false, async (args) => {
       if (!backend.compose || typeof args.text !== "string" || !args.text || args.text.length > 16384) throw new TypeError("MESSAGE_LIMIT");
-      return { ok: true, data: await backend.compose(args.text, args.selectionId === undefined ? undefined : requiredId(args, "selectionId")) };
+      const selected = args.selectionId === undefined ? undefined : requiredId(args, "selectionId");
+      if (optionalBoolean(args, "downloadLinks") === true) {
+        if (!backend.downloadLinks) throw new TypeError("LINK_DOWNLOAD_UNAVAILABLE");
+        return { ok: true, data: await backend.downloadLinks(args.text, selected) };
+      }
+      return { ok: true, data: await backend.compose(args.text, selected) };
     }],
     ["selection.release", MINIAPP_CAPABILITY.SELECTION, false, async (args) => {
       await backend.release(requiredId(args, "selectionId"));

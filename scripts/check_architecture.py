@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWED = {
+    "dandelion-download": {"dandelion-core"},
     "dandelion-compat": {"dandelion-core"},
     "dandelion-hotspot": {"dandelion-core"},
     "dandelion-updater": {"dandelion-core"},
@@ -19,7 +20,7 @@ ALLOWED = {
     "dandelion-platform-linux": {"dandelion-core"},
     "dandelion-scanner": {"dandelion-core"},
     "dandelion-transport": {"dandelion-core", "dandelion-packet"},
-    "dandelion-app": {"dandelion-core", "dandelion-config", "dandelion-packet", "dandelion-pacing",
+    "dandelion-app": {"dandelion-download", "dandelion-core", "dandelion-config", "dandelion-packet", "dandelion-pacing",
                       "dandelion-platform-linux", "dandelion-scanner", "dandelion-transport", "dandelion-state", "dandelion-tui", "dandelion-updater", "dandelion-hotspot", "dandelion-compat"},
 }
 found = set()

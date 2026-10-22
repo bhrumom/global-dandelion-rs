@@ -22,6 +22,7 @@ INLINE_REWRITES = {
     "./host-tools.js": "fabushi-host-tools",
     "./composer.js": "fabushi-composer",
     "./globe.js": "fabushi-globe",
+    "./links.js": "fabushi-links",
 }
 INLINE_CSP = (
     "default-src 'none'; script-src 'unsafe-inline' data: 'wasm-unsafe-eval'; "
@@ -128,7 +129,7 @@ def inline_html(resources, destination):
         "fabushi-host-tools": (resources / "host-tools.js").read_text(encoding="utf-8"),
     }
     # Module dependencies are rewritten before inlining, including nested imports.
-    for filename, module in [('globe.js', 'fabushi-globe'), ('composer.js', 'fabushi-composer')]:
+    for filename, module in [('links.js', 'fabushi-links'), ('globe.js', 'fabushi-globe'), ('composer.js', 'fabushi-composer')]:
         source = (resources / filename).read_text(encoding='utf-8')
         for old, new in INLINE_REWRITES.items():
             source = source.replace(f"'{old}'", f"'{new}'").replace(f'"{old}"', f'"{new}"')
