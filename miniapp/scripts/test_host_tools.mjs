@@ -154,3 +154,12 @@ test('paste URL parsing preserves ordinary text and deduplicates resources', asy
   assert.ok(withoutLinks(text, links).includes('请发送'));
   assert.deepEqual(extractLinks('普通文字 file:///etc/passwd'), []);
 });
+
+test('a refreshed native announcement updates capabilities for downloaded selections', async () => {
+  clearGlobals(); let ready = false;
+  globalThis.fabushi = { invoke: async () => ({ ok: true, data: { capabilities: ready ? ['offline', 'selection', 'transfer'] : ['offline'] } }) };
+  const host = await connectHost(), original = host.capabilities;
+  assert.equal(original.has('transfer'), false);
+  ready = true; await host.call('offline.capabilities');
+  assert.equal(host.capabilities, original); assert.equal(original.has('transfer'), true);
+});

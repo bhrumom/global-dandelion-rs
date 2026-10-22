@@ -219,6 +219,7 @@ export async function mountComposer(rust, host) {
     if (busy || closed) return false;
     const text = $('message').value, urls = extractLinks(text);
     if (!urls.length) return true;
+    if (files.length) { status('已选离线文件会保留；请先完成当前离线文件，或清空后通过 ＋ 重新选择文件再添加链接。'); return false; }
     if (!canDownload) { status('此安装版本没有 Rust 链接下载能力，请更新小程序。'); return false; }
     if (urls.length > 8) { status('一次最多下载 8 个链接。'); return false; }
     busy = true; const ticket = ++epoch;
