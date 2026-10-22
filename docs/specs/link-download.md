@@ -28,3 +28,7 @@ CI must cover redirects into private space, malicious URLs/filenames, oversized
 and chunked bodies, HTML resource selection/deduplication, timeout/cancel/cleanup,
 selection composition and actual downloaded bytes through the Rust loopback engine.
 Signed package/install/runtime evidence remains distinct from source/CI evidence.
+
+LD05: offline.capabilities must preserve package-owned feature announcements through
+the native tool registry and worker wire response. A backend-only feature check is
+insufficient: CI must assert link-download-v1 on the actual worker response.

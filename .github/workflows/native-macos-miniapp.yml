@@ -63,7 +63,7 @@ jobs:
       - name: Prepare native-capability package
         run: |
           python3 scripts/disk_guard.py --path . --planned-bytes 67108864
-          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --version 0.4.4 --platforms desktop --native-dir native-built --output global-dandelion-UNSIGNED.zip
+          python3 miniapp/scripts/package.py --pkg miniapp-generated --resources miniapp-resources --commit "$TESTED_COMMIT" --version 0.4.5 --platforms desktop --native-dir native-built --output global-dandelion-UNSIGNED.zip
           python3 -m venv "$RUNNER_TEMP/native-package-python"
           "$RUNNER_TEMP/native-package-python/bin/pip" install cryptography==46.0.3
           "$RUNNER_TEMP/native-package-python/bin/python" miniapp/scripts/test_package.py miniapp-resources

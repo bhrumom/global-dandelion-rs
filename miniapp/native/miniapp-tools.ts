@@ -61,7 +61,7 @@ export interface MiniAppTransferSendConfig {
 
 /** Implemented by the native owner; never reachable from the renderer directly. */
 export interface MiniAppToolBackend {
-  capabilities(): Promise<{ readonly capabilities: MiniAppCapability[]; readonly platform: string; readonly targetPools: MiniAppTargetPool[] }>;
+  capabilities(): Promise<{ readonly capabilities: MiniAppCapability[]; readonly platform: string; readonly targetPools: MiniAppTargetPool[]; readonly features?: readonly string[] }>;
   readState(): Promise<unknown>;
   pick(mode: "files" | "directory", limits: { readonly maxFiles: number; readonly maxBytes: number }): Promise<{ readonly selectionId: string; readonly entries: MiniAppSelectionEntry[] } | null>;
   release(selectionId: string): Promise<void>;
@@ -130,7 +130,7 @@ function handlersFor(backend: MiniAppToolBackend): Map<string, { capability: Min
   const entries: Array<[string, MiniAppCapability, boolean, Handler]> = [
     ["offline.capabilities", MINIAPP_CAPABILITY.OFFLINE, false, async () => {
       const announced = await backend.capabilities();
-      return { ok: true, data: { contract: MINIAPP_TOOL_CONTRACT, platform: announced.platform, capabilities: announced.capabilities, targetPools: announced.targetPools } };
+      return { ok: true, data: { contract: MINIAPP_TOOL_CONTRACT, platform: announced.platform, capabilities: announced.capabilities, targetPools: announced.targetPools, features: announced.features ?? [] } };
     }],
     ["offline.state.read", MINIAPP_CAPABILITY.OFFLINE, false, async () => ({ ok: true, data: await backend.readState() })],
     ["selection.pick", MINIAPP_CAPABILITY.SELECTION, false, async (args) => {

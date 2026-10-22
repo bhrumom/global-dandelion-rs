@@ -71,8 +71,8 @@ def prepare(pkg, output, source_commit, version, platforms, native_dir=None):
         "network-transfer=host-mediated\n", encoding="utf-8")
     files = {}
     if native_dir is not None:
-        if platforms != ['desktop'] or version not in ('0.4.0', '0.4.1', '0.4.2', '0.4.3', '0.4.4'):
-            raise ValueError('native package requires reviewed Mac-only 0.4.0/0.4.1/0.4.2/0.4.3/0.4.4 release')
+        if platforms != ['desktop'] or version not in ('0.4.0', '0.4.1', '0.4.2', '0.4.3', '0.4.4', '0.4.5'):
+            raise ValueError('native package requires reviewed Mac-only 0.4.0/0.4.1/0.4.2/0.4.3/0.4.4/0.4.5 release')
         (output / 'native').mkdir()
         info = output / 'BUILD-INFO.txt'
         info.write_text(info.read_text().replace('kind=offline-web-preview', 'kind=install-owned-native-macos'), encoding='utf-8')
