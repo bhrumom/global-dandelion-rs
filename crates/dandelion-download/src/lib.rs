@@ -234,6 +234,16 @@ pub fn download(urls: &[String], sink: &mut impl Sink) -> Result<Report> {
         }
         let outcome = (|| -> Result<Entry> {
             let mut response = request(url.clone())?;
+            let is_playlist = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|v| v.contains("mpegurl") || v.contains("dash+xml"))
+                || response.url().path().ends_with(".m3u8")
+                || response.url().path().ends_with(".mpd");
+            if is_playlist {
+                return Err(fail("streaming playlist requires a direct media file"));
+            }
             let is_html = response
                 .headers()
                 .get(reqwest::header::CONTENT_TYPE)

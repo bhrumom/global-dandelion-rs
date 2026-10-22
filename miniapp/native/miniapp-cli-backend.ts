@@ -418,6 +418,7 @@ export function createDandelionCliBackend(
           for (const [index, path] of paths.entries()) { const info = await lstat(path); if (!info.isFile() || info.isSymbolicLink() || info.size !== receipt.entries[index]!.size) throw new Error("INVALID_DOWNLOAD_FILE"); }
           staged = await stageSnapshot([...source, ...paths], { maxFiles: 128, maxBytes: 1024 ** 3 });
           if (ticket !== generation || operation.state === "cancelled") return;
+          if (run.timedOut) throw new Error("DOWNLOAD_TIMEOUT");
           pruneSelections();
           if (selections.size >= MAX_SELECTIONS) throw new Error("SELECTION_LIMIT_EXCEEDED");
           const info = await stat(staged.root, { bigint: true }), selectionId = randomUUID();
@@ -425,15 +426,17 @@ export function createDandelionCliBackend(
           selections.set(selectionId, { root: staged.root, device: info.dev, inode: info.ino, expiresAt: Date.now() + SELECTION_TTL_MS, dispose: staged.dispose });
           staged = undefined;
           operation.result = { selectionId, entries, warnings: Array.isArray(receipt.warnings) ? receipt.warnings.slice(0, 32).map(w => String(w).slice(0, 240)) : [] };
-          operation.state = "complete";
         } catch (error) {
           if (operation.state !== "cancelled") { operation.state = "failed"; operation.error = run.timedOut ? "下载超时，请检查链接或资源大小。" : "下载未完成，请检查链接访问权限、网络或文件大小。"; }
         } finally {
           clearTimeout(timer);
-          await staged?.dispose();
-          if (previous) { previous.users!--; if (previous.released && !previous.users) await previous.dispose?.(); }
-          await rm(directory, { recursive: true, force: true });
+          try {
+            await staged?.dispose();
+            if (previous) { previous.users!--; if (previous.released && !previous.users) await previous.dispose?.(); }
+            await rm(directory, { recursive: true, force: true });
+          } catch { operation.state = "failed"; operation.error = "下载暂存清理未完成，请关闭小程序后检查可用空间。"; }
         }
+        if (operation.state === "running" && operation.result) operation.state = "complete";
       })();
       downloadJobs.add(job);
       void job.then(() => downloadJobs.delete(job), () => downloadJobs.delete(job));
