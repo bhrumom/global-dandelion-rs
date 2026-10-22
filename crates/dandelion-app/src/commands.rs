@@ -32,6 +32,10 @@ fn load(cli: &Cli, overrides: Overrides) -> Result<dandelion_config::ValidatedCo
 }
 pub fn execute(cli: &Cli) -> Result<u8> {
     match &cli.command {
+        Command::NetworkPrepare { directory } => {
+            output::json(&crate::network::prepare(directory)?)?;
+            Ok(0)
+        }
         Command::Receive(args) => receive(args),
         Command::Compat { command } => compat(command),
         Command::Benchmark {
