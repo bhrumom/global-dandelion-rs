@@ -11,7 +11,7 @@ export async function mountComposer(rust, host) {
   const nativeLocal = () => mode() === 'local' && host.capabilities.has('transfer') && pools.some(pool => pool.id === 'loopback');
   const description = {
     local: '本地转轮：在本机用 Rust 完成 GDAN 编码与解码回环，不发送网络数据。',
-    global: '全球发送：仅向你已授权的 mTLS 目标传输。轨迹为运行可视化，接收校验单独确认。',
+    global: '全球发送：自动连接小程序内置、通过证书校验的接收节点。轨迹为运行可视化，接收校验单独确认。',
     hotspot: '热点场能：在已连接的热点／局域网内向已授权设备传输，不连接公网目标。',
   };
   const controls = () => {
@@ -80,7 +80,16 @@ export async function mountComposer(rust, host) {
     $('composer-target').replaceChildren();
     const eligible = pools.filter(pool => mode() === 'hotspot' ? pool.id === 'lan' || pool.kind === 'lan' : pool.id !== 'loopback' && pool.id !== 'lan' && pool.kind !== 'lan');
     for (const pool of eligible) { const option = document.createElement('option'); option.value = String(pool.id); option.textContent = String(pool.label ?? pool.id); $('composer-target').append(option); }
-    if (!eligible.length) { const option = document.createElement('option'); option.value = ''; option.textContent = '未配置对应授权目标'; $('composer-target').append(option); }
+    if (!eligible.length) { const option = document.createElement('option'); option.value = ''; option.textContent = mode() === 'global' && response.data?.network?.message ? response.data.network.message : '未配置对应授权目标'; $('composer-target').append(option); }
+    return response.data?.network;
+  };
+  let bootstrapRefresh = null, bootstrapAttempts = 0;
+  const observeBootstrap = async network => {
+    if (closed || network?.state !== 'checking' || bootstrapAttempts++ >= 15) return;
+    bootstrapRefresh = setTimeout(async () => {
+      if (closed) return;
+      observeBootstrap(busy ? network : await refreshPools());
+    }, 4000);
   };
   $('mode').onchange = async () => {
     epoch++; await clear(); $('mode-description').textContent = description[mode()];
@@ -232,8 +241,8 @@ export async function mountComposer(rust, host) {
     }
     operation = null; busy = false; controls(); $('globe-state').textContent = '已停止'; status(id ? '已请求停止原生传输。' : '已停止本次运行。');
   };
-  window.addEventListener('pagehide', () => { closed = true; epoch++; if (operation) void host.call('transfer.cancel', { operationId: operation }); if (nativeSelection) void host.call('selection.release', { selectionId: nativeSelection }); files = []; report = null; globe.destroy(); }, { once: true });
-  await refreshPools();
+  window.addEventListener('pagehide', () => { closed = true; clearTimeout(bootstrapRefresh); epoch++; if (operation) void host.call('transfer.cancel', { operationId: operation }); if (nativeSelection) void host.call('selection.release', { selectionId: nativeSelection }); files = []; report = null; globe.destroy(); }, { once: true });
+  observeBootstrap(await refreshPools());
   if (nativeLocal()) $('mode-description').textContent = '本地转轮：安装包内 Rust 引擎执行本机 UDP 回环，不连接外部目标。';
   $('globe-state').textContent = rust ? '本地转轮 · Rust 已就绪' : 'Rust 内核加载失败';
   status(rust ? '输入文字或点击 ＋ 添加文件；点击 ↑ 开始本地回环。' : '无法加载随包 Rust 内核，请检查完整安装。'); controls();

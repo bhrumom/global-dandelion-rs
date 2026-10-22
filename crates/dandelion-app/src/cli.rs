@@ -32,6 +32,11 @@ pub enum LogFormat {
 }
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Prepare private identity and probe managed receivers without reading files.
+    NetworkPrepare {
+        #[arg(long)]
+        directory: PathBuf,
+    },
     /// Read selected directories once and verify every datagram locally.
     Run(Run),
     /// Receive and verify TLS 1.3 data from authenticated clients (memory receipts).

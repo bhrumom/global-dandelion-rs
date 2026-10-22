@@ -91,6 +91,7 @@ crates/
   dandelion-app/             CLI and composition root; Supervisor
   dandelion-core/            values, policies, capability contracts, pure telemetry/rate models; no Tokio/Linux
   dandelion-config/          deserialization, merge, validation
+  dandelion-network/         bounded managed directory, private identity and certificate enrollment
   dandelion-scanner/         traversal, bounded readers; source capability only
   dandelion-packet/          deterministic wire codec and compatibility codecs
   dandelion-pacing/          token bucket and schedule policy

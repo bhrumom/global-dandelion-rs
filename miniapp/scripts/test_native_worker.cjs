@@ -13,7 +13,7 @@ const { randomUUID } = require('node:crypto');
   const privateData = await mkdtemp(path.join(tmpdir(), 'dandelion-private-profile-'));
   const importFile = path.join(privateData, 'import.toml');
   await writeFile(importFile, '[scanner]\nroots=["/tmp/imported-root"]\nallowed_mount_prefixes=["/tmp/imported-mount"]\n[state]\nenabled=true\ndirectory="/tmp/unscoped-shared-state"\n');
-  const worker = spawn(process.execPath, [path.resolve(process.argv[2], 'worker.cjs')], { env: { ...process.env, FABUSHI_NATIVE_DATA_DIRECTORY: privateData }, stdio: ['pipe', 'pipe', 'inherit'] });
+  const worker = spawn(process.execPath, [path.resolve(process.argv[2], 'worker.cjs')], { env: { ...process.env, FABUSHI_NATIVE_DATA_DIRECTORY: privateData, DANDELION_OFFLINE: "1" }, stdio: ['pipe', 'pipe', 'inherit'] });
   const pending = new Map();
   const pickFiles = [];
   let buffer = '';
@@ -47,6 +47,8 @@ const { randomUUID } = require('node:crypto');
   try {
     const capabilities = await call('offline.capabilities');
     assert.equal(capabilities.ok, true);
+    assert.equal(capabilities.data.network.state, 'offline');
+    assert.equal(capabilities.data.network.receivers, 0);
     for (const c of ['selection', 'scan', 'transfer', 'state', 'config', 'platform', 'diagnostics', 'update', 'compat']) assert.ok(capabilities.data.capabilities.includes(c));
     assert.ok(!capabilities.data.capabilities.includes('hotspot'));
     const selftest = await call('diagnostics.selfTest');
